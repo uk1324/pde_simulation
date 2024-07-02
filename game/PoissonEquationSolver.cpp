@@ -1,7 +1,5 @@
 #include "PoissonEquationSolver.hpp"
 #include "MatrixUtils.hpp"
-
-using Float = f32;
 /*
 
 Poisson's equation is
@@ -29,7 +27,7 @@ This creates a linear system of (n - 1) * (m - 1) equations.
 Corner cases
 if i = 1, j = 1
 M u(1, 1) - u(2, 1) - u(0, 1) - L u(1, 2) - L u(1, 0) = N f(1, 1)
-M u(1, 1) - u(2, 1) - L u(1, 2) = N f(1, 1) + g(0, 1) + L g(1, 0)
+M u(1, 1) - u(2, 1) - L u(1, 2) = N f(1, 1) + u(0, 1) + L u(1, 0)
 
 if i = 1, j = m - 1
 M u(1, m - 1) - u(2, m - 1) - u(0, m - 1) - L u(1, m) - L u(1, m - 2) = N f(1, m - 1)
@@ -40,8 +38,8 @@ M u(n - 1, 1) - u(n, 1) - u(n - 2, 1) - L u(n - 1, 2) - L u(n - 1, 0) = N f(n - 
 M u(n - 1, 1) - u(n - 2, 1) - L u(n - 1, 2) = N f(n - 1, 1) + u(n, 1) + L u(n - 1, 0)
 
 if i = n - 1, j = m - 1
-M u(n - 1, m - 1) - u(n, m - 1) - u(n - 2, m - 1) - L u(n - 2, m) - L u(n - 1, m - 2) = N f(n - 1, m - 1)
-M u(n - 1, m - 1) - u(n - 2, m - 1) - L u(n - 1, m - 2) = N f(n - 1, m - 1) + u(n, m - 1) + L u(n - 2, m)
+M u(n - 1, m - 1) - u(n, m - 1) - u(n - 2, m - 1) - L u(n - 1, m) - L u(n - 1, m - 2) = N f(n - 1, m - 1)
+M u(n - 1, m - 1) - u(n - 2, m - 1) - L u(n - 1, m - 2) = N f(n - 1, m - 1) + u(n, m - 1) + L u(n - 1, m)
 
 Edge cases
 if i = 1, j in { 2, ... m - 2 }
@@ -66,6 +64,7 @@ enum class SolveGaussianEliminationOutput {
 	SUCCESS,
 	NO_SOLUTION
 };
+using Float = f32;
 
 // solves mx = b for x
 // the matrix m has to be square
@@ -75,6 +74,7 @@ SolveGaussianEliminationOutput solveGaussianElimination(MatrixView<Float> m, Mat
 	const auto n = m.sizeX();
 	ASSERT(b.sizeX() == 1);
 	ASSERT(b.sizeY() == n);
+	ASSERT(b.size() == x.size());
 
 	// Loop to n - 1, because (n, n) already lies on the diagonal so the nth loop would do nothing.
 	for (i64 i = 0; i < n - 1; i++) {
@@ -130,6 +130,31 @@ SolveGaussianEliminationOutput solveGaussianElimination(MatrixView<Float> m, Mat
 	return SolveGaussianEliminationOutput::SUCCESS;
 }
 
+void solveGaussSeidel(MatrixView<Float> m, MatrixView<Float> b, MatrixView<Float> x) {
+	const auto n = m.sizeY();
+	ASSERT(b.sizeX() == 1);
+	ASSERT(b.sizeY() == n);
+	ASSERT(b.size() == x.size());
+
+	for (i64 i = 0; i < n; i++) {
+		x(0, i) = Float(0);
+	}
+	i32 iterationCount = 20;
+	for (i32 i = 0; i < iterationCount; i++) {
+		for (i64 equationI = 0; equationI < n; equationI++) {
+			Float sum = b(0, equationI);
+			for (i64 variableI = 0; variableI < n; variableI++) {
+				if (equationI == variableI) {
+					continue;
+				}
+				sum -= m(variableI, equationI) * x(0, variableI);
+			}
+			sum /= m(equationI, equationI);
+			x(0, equationI) = sum;
+		}
+	}
+}
+
 SolveGaussianEliminationOutput solveGaussianElimination(Matrix<Float>& m, Matrix<Float>& b, Matrix<Float>& x) {
 	return solveGaussianElimination(matrixViewFromMatrix(m), matrixViewFromMatrix(b), matrixViewFromMatrix(x));
 }
@@ -162,8 +187,12 @@ void gaussianEliminationTest() {
 	matrixPrint(b);
 
 	auto x = Matrix<Float>::uninitialized(1, 5);
-	const auto result = solveGaussianElimination(m, b, x);
-	ASSERT(result == SolveGaussianEliminationOutput::SUCCESS);
+	{
+		auto mTmp = m.clone();
+		auto bTmp = b.clone();
+		const auto result = solveGaussianElimination(mTmp, bTmp, x);
+		ASSERT(result == SolveGaussianEliminationOutput::SUCCESS);
+	}
 	matrixPrint(x);
 
 	const auto b1 = m * x;
@@ -177,85 +206,71 @@ void gaussianEliminationTest() {
 // if a matrix is positive definite then it's determinant is positive, because the determinant is the product of the eigenvalues.
 
 #include <Put.hpp>
-void PoissonEquationSolver::solve() {
-	const auto a = Float(0.0);
-	const auto b = Float(0.5);
+// Solves Dxx u + Dyy u = f(x, y) for u
+// u has to have values on boundary values specified, the function finds the order values
+// The corner values are not used.
+void PoissonEquationSolver::solve(const MatrixView<const Float>& f, MatrixView<Float> u, const Aabb& region) {
+	ASSERT(f.size() == u.size());
+	const auto n = f.sizeX() - 1;
+	const auto m = f.sizeY() - 1;
 
-	const auto c = Float(0.0);
-	const auto d = Float(0.5);
-
-	const i32 n = 6;
-	const i32 m = 7;
-
-	const auto h = (b - a) / n;
-	const auto k = (d - a) / m;
-
-	auto x = [&](i32 i) -> Float {
-		return a + i * h;
-	};
-
-	auto y = [&](i32 j) -> Float {
-		return b + j * k;
-	};
-
-	auto f = [&](Float x, Float y) -> Float {
-		return Float(0.0);
-	};
-
-	auto g = [&](Float x, Float y) -> Float {
-		/*if (y == Float(0.0)) {
-			return Float(0.0);
-		}
-		if (x == Float(0.0f)) {
-			return Float(0.0);
-		}
-		if (x == Float(0.5)) {
-			return Float(200.0) * y;
-		}
-		if (y == Float(0.5)) {
-			return Float(200.0) * x;
-		}*/
-		return 0.0f;
-	};
+	const auto regionSize = region.size();
+	const auto h = regionSize.x / n;
+	const auto k = regionSize.y / m;
 
 	const auto L = (h * h) / (k * k);
 	const auto M = Float(2.0) * (Float(1.0) + L);
 	const auto N = -(h * h);
 
+	/*
+	Example for a grid with n = 5, m = 4
+	(1, 1) -> 0
+	(2, 1) -> 1
+	(3, 1) -> 2
+	(1, 2) -> 3
+	(2, 2) -> 4
+	(3, 2) -> 5
+	It's skips i = 0, j = 0, i = 4, n = 3, because these are specified by the boundary conditions so there are no equations (rows) for them.
+	*/
+	auto gridIndexToVariableIndex = [&n](i32 i, i32 j) {
+		return i + (j - 1) * (n - 1) - 1;
+	};
+
 	const auto matrixSize = (n - 1) * (m - 1);
-	auto s = Matrix<Float>::uninitialized(matrixSize, matrixSize);
-	for (i32 i = 0; i < s.sizeX(); i++) {
-		for (i32 j = 0; j < s.sizeY(); j++) {
-			s(i, j) = Float(0);
+	auto matrix = Matrix<Float>::uninitialized(matrixSize, matrixSize);
+	for (i32 i = 0; i < matrix.sizeX(); i++) {
+		for (i32 j = 0; j < matrix.sizeY(); j++) {
+			matrix(i, j) = Float(0);
 		}
 	}
-
-	auto l = [](i32 i, i32 j) {
-		return i + (j - 1) * (n - 1) - 1;
-		//return j + (i - 1) * (n - 1) - 1;
-	};
+	auto augmentedColumn = Matrix<Float>::uninitialized(1, matrixSize);
 
 	i32 row = 0;
-	auto set = [&row, &s, &l](i32 i, i32 j, Float value) {
-		s(l(i, j), row) = value;
+	auto set = [&](i32 i, i32 j, Float value) {
+		matrix(gridIndexToVariableIndex(i, j), row) = value;
 	};
 
-	const auto augmentedColumn = s.sizeX() - 1;
+	auto setAugmentedColumn = [&](Float value) {
+		augmentedColumn(0, row) = value;
+	};
+
+	// The values are specified row by row.
+	// The equations are specified in the same order as gridIndexToVariableIndex increases.
 	{
-		// M u(1, 1) - u(2, 1) - L u(1, 2) = N f(1, 1) + g(0, 1) + L g(1, 0)
+		// M u(1, 1) - u(2, 1) - L u(1, 2) = N f(1, 1) + u(0, 1) + L u(1, 0)
 		set(1, 1, M);
 		set(2, 1, Float(-1.0));
 		set(1, 2, -L);
-		//s(augmentedColumn, row) = N * f(1, 1) + g(0, 1) + L * g(1, 0);
+		setAugmentedColumn(N * f(1, 1) + u(0, 1) + L * u(1, 0));
 		row++;
 	}
 	for (i32 i = 2; i <= n - 2; i++) {
-		// M u(i, 1) - u(i + 1, 1) - u(i - 1, 1) - L u(i, 2) = N f(i, 1) + L g(i, 0)
+		// M u(i, 1) - u(i + 1, 1) - u(i - 1, 1) - L u(i, 2) = N f(i, 1) + L u(i, 0)
 		set(i, 1, M);
 		set(i + 1, 1, Float(-1.0));
 		set(i - 1, 1, Float(-1.0));
 		set(i, 2, -L);
-		//s(augmentedColumn, row) = N * f(i, 1) + L * g(i, 0);
+		setAugmentedColumn(N * f(i, 1) + L * u(i, 0));
 		row++;
 	}
 	{
@@ -263,17 +278,17 @@ void PoissonEquationSolver::solve() {
 		set(n - 1, 1, M);
 		set(n - 2, 1, Float(-1.0));
 		set(n - 1, 2, -L);
-		//s(augmentedColumn, row) = N * f(n - 1, 1) + g(n, 1) + L * g(n - 1, 0);
+		setAugmentedColumn(N * f(n - 1, 1) + u(n, 1) + L * u(n - 1, 0));
 		row++;
 	}
 	for (i32 j = 2; j <= m - 2; j++) {
 		{
-			// M u(1, j) - u(2, j) - L u(1, j + 1) - L u(1, j - 1) = N f(1, j) + g(0, j)
+			// M u(1, j) - u(2, j) - L u(1, j + 1) - L u(1, j - 1) = N f(1, j) + u(0, j)
 			set(1, j, M);
 			set(2, j, Float(-1.0));
 			set(1, j + 1, -L);
 			set(1, j - 1, -L);
-			//s(augmentedColumn, row) = N * f(1, j) + g(0, j);
+			setAugmentedColumn(N * f(1, j) + u(0, j));
 			row++;
 		}
 		for (i32 i = 2; i <= n - 2; i++) {
@@ -283,7 +298,7 @@ void PoissonEquationSolver::solve() {
 			set(i - 1, j, Float(-1.0));
 			set(i, j + 1, -L);
 			set(i, j - 1, -L);
-			//s(augmentedColumn, row) = N * f(i, j);
+			setAugmentedColumn(N * f(i, j));
 			row++;
 		}
 		{
@@ -292,7 +307,7 @@ void PoissonEquationSolver::solve() {
 			set(n - 2, j, Float(-1.0));
 			set(n - 1, j + 1, -L);
 			set(n - 1, j - 1, -L);
-			//s(augmentedColumn, row) = N * f(n - 1, j) + g(n, j);
+			setAugmentedColumn(N * f(n - 1, j) + u(n, j));
 			row++;
 		}
 	}
@@ -301,26 +316,55 @@ void PoissonEquationSolver::solve() {
 		set(1, m - 1, M);
 		set(2, m - 1, Float(-1.0));
 		set(1, m - 2, -L);
-		//s(augmentedColumn, row) = N * f(1, m - 1) + g(0, m - 1) + L * g(1, m);
+		setAugmentedColumn(N * f(1, m - 1) + u(0, m - 1) + L * u(1, m));
 		row++;
 	}
 	for (i32 i = 2; i <= n - 2; i++) {
 		// M u(i, m - 1) - u(i + 1, m - 1) - u(i - 1, m - 1) - L u(i, m - 2) = N f(i, m - 1) + L u(i, m)
 		set(i, m - 1, M);
-		set(i + 1, m - 1, Float(-1.0));
+		set(i + 1, m - 1, Float(-1.0)); 
 		set(i - 1, m - 1, Float(-1.0));
 		set(i, m - 2, -L);
-		//s(augmentedColumn, row) = N * f(i, m - 1) + L * g(i, m);
+		setAugmentedColumn(N * f(i, m - 1) + L * u(i, m));
 		row++;
 	}
 	{
-		// M u(n - 1, m - 1) - u(n - 2, m - 1) - L u(n - 1, m - 2) = N f(n - 1, m - 1) + u(n, m - 1) + L u(n - 2, m)
+		// M u(n - 1, m - 1) - u(n - 2, m - 1) - L u(n - 1, m - 2) = N f(n - 1, m - 1) + u(n, m - 1) + L u(n - 1, m)
 		set(n - 1, m - 1, M);
 		set(n - 2, m - 1, Float(-1.0));
 		set(n - 1, m - 2, -L);
-		//s(augmentedColumn, row) = N * f(n - 1, m - 1) + g(n, m - 1) + L * g(n - 2, m);
+		setAugmentedColumn(N * f(n - 1, m - 1) + u(n, m - 1) + L * u(n - 1, m));
 		row++;
 	}
 
-	matrixPrint(s);
+	const auto matrixCopy = matrix.clone();
+	const auto augmentedColumnCopy = augmentedColumn.clone();
+	auto result = solveGaussianElimination(matrix, augmentedColumn);
+	if (!result.has_value()) {
+		return;
+	}
+
+	for (i64 j = 1; j <= m - 1; j++) {
+		for (i64 i = 1; i <= n - 1; i++) {
+			u(i, j) = (*result)(0, gridIndexToVariableIndex(i, j));
+		}
+	}
+
+	//const auto matrixCopy = matrix.clone();
+	//const auto augmentedColumnCopy = augmentedColumn.clone();
+	//auto result = Matrix<Float>::uninitialized(augmentedColumn.size());
+	//solveGaussSeidel(matrixViewFromMatrix(matrix), matrixViewFromMatrix(augmentedColumn), matrixViewFromMatrix(result));
+
+	//for (i64 j = 1; j <= m - 1; j++) {
+	//	for (i64 i = 1; i <= n - 1; i++) {
+	//		u(i, j) = result(0, gridIndexToVariableIndex(i, j));
+	//	}
+	//}
+
+	matrixPrint(matrixCopy);
+	matrixPrint(matrixTranspose(matrixCopy) - matrix);
+
+	/*const auto test = matrixCopy * (*result);
+	matrixPrint(test - augmentedColumnCopy);*/
 }
+

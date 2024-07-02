@@ -4,7 +4,7 @@
 #include <sstream>
 #include <iomanip>
 
-size_t number_of_digits(double n) {
+inline size_t number_of_digits(double n) {
 	std::ostringstream strs;
 
 	strs << n;
@@ -12,7 +12,7 @@ size_t number_of_digits(double n) {
 }
 #include <iostream>
 template<typename T>
-void matrixPrint(const MatrixView<const T>& matrix) {
+void matrixPrint(const MatrixView<T>& matrix) {
 	constexpr size_t nmax{ 100 };
 	size_t max_len_per_column[nmax];
 	const auto n = matrix.sizeX();
@@ -37,4 +37,15 @@ void matrixPrint(const MatrixView<const T>& matrix) {
 template<typename T>
 void matrixPrint(const Matrix<T>& matrix) {
 	matrixPrint(matrixViewFromConstMatrix(matrix));
+}
+
+template<typename T>
+Matrix<T> matrixTranspose(const Matrix<T>& m) {
+	auto out = Matrix<T>::uninitialized(m.sizeY(), m.sizeX());
+	for (i64 i = 0; i < m.sizeX(); i++) {
+		for (i64 j = 0; j < m.sizeY(); j++) {
+			out(j, i) = m(i, j);
+		}
+	}
+	return out;
 }
