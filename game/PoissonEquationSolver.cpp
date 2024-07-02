@@ -185,7 +185,7 @@ void PoissonEquationSolver::solve() {
 	const auto d = Float(0.5);
 
 	const i32 n = 6;
-	const i32 m = 6;
+	const i32 m = 7;
 
 	const auto h = (b - a) / n;
 	const auto k = (d - a) / m;
@@ -231,7 +231,7 @@ void PoissonEquationSolver::solve() {
 	}
 
 	auto l = [](i32 i, i32 j) {
-		return i + (j - 1) * (m - 1) - 1;
+		return i + (j - 1) * (n - 1) - 1;
 		//return j + (i - 1) * (n - 1) - 1;
 	};
 
