@@ -366,6 +366,12 @@ void solvePoissonEquation(const MatrixView<const Float>& f, MatrixView<Float> u,
 
 	/*const auto test = matrixCopy * (*result);
 	matrixPrint(test - augmentedColumnCopy);*/
+
+	/*const auto test = matrixCopy * (*result);
+	const auto test2 = test - augmentedColumnCopy;
+	const auto t0 = matrixMax(test2);
+	const auto t1 = matrixMin(test2);
+	put("% %", t0, t1);*/
 }
 
 //void steadyStateHeatEquationTest() {

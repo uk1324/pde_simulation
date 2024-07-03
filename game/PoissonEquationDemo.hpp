@@ -14,18 +14,17 @@ struct PoissonEquationDemo {
 	Matrix<f32> f;
 	Vec2T<i64> size;
 
-	f32 maxValue = 1.0f;
-	f32 minValue = 0.0f;
-
-	f32 valueToWrite = 1.0f;
 	i64 radius = 3;
 	bool displayNumbers = false;
 
-	f32 fInputMin = 0.0f;
-	f32 fInputMax = 0.0f;
-	bool defaultFInputMinMax = true;
+	f32 uInputMin = 0.0f;
+	f32 uInputMax = 1.0f;
+	f32 uInputValueToWrite = 1.0f;
 
-	f32 outputMin = 0.0f;
-	f32 outputMax = 1.0f;
-	bool defaultOutputMinMax = true;
+	f32 fInputMin = -100.0f;
+	f32 fInputMax = 100.0f;
+	f32 fValueToWrite = 100.0f;
+
+	f32 calculatedOutputMin = 0.0f;
+	f32 calculatedOutputMax = 1.0f;
 };

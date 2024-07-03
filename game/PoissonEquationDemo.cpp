@@ -5,7 +5,7 @@
 #include <engine/Math/Aabb.hpp>
 #include "PoissonEquationSolver.hpp"
 
-const auto INITIAL_SIZE = Vec2T<i64>(50, 50);
+const auto INITIAL_SIZE = Vec2T<i64>(40, 40);
 
 PoissonEquationDemo::PoissonEquationDemo() 
 	: inputU(Matrix<f32>::zero(INITIAL_SIZE))
@@ -53,19 +53,19 @@ void PoissonEquationDemo::update() {
 	ImGui::Begin(plotWindowName);
 	const Aabb inputUGridBounds(Vec2(0.0f), Vec2(1.0f));
 	const auto gridBoundsSize = inputUGridBounds.size();
-	const auto fGridBounds = inputUGridBounds.translated(Vec2(gridBoundsSize.x, 0.0f));
-	const auto outputUGridBounds = fGridBounds.translated(Vec2(gridBoundsSize.x, 0.0f));
+	const auto fGridBounds = inputUGridBounds.translated(Vec2(gridBoundsSize.x + 0.05, 0.0f));
+	const auto outputUGridBounds = fGridBounds.translated(Vec2(gridBoundsSize.x + 0.05, 0.0f));
 
 	Vec2 cursorPlotPos(0.0f);
 	//ImPlot::ShowDemoWindow();
-
 	if (ImPlot::BeginPlot("##p", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
-		auto heatmap = [this](const Matrix<f32>& m, const Aabb& bounds, f32 min, f32 max) {
+		auto heatmap = [this](const char* text, const Matrix<f32>& m, const Aabb& bounds, f32 min, f32 max) {
+			ImPlot::PlotText(text, bounds.center().x, bounds.max.y + 0.05f);
 			//const char* format = nullptr; // "%.1f"
 			const char* format = displayNumbers ? "%.1f" : "";
 			ImPlot::PushColormap(ImPlotColormap_Jet);
 			ImPlot::PlotHeatmap(
-				"",
+				text,
 				m.data(), m.sizeY(), m.sizeX(),
 				min, max, format,
 				ImVec2(bounds.min), ImVec2(bounds.max));
@@ -76,12 +76,12 @@ void PoissonEquationDemo::update() {
 			DrawList.AddRect(
 				ImPlot::PlotToPixels(bounds.min.x, bounds.min.y), 
 				ImPlot::PlotToPixels(bounds.max.x, bounds.max.y),
-				IM_COL32(0, 255, 0, 255));
+				IM_COL32(255, 255, 255, 255));
 			ImPlot::PopPlotClipRect();
 		};
-		heatmap(inputU, inputUGridBounds, minValue, maxValue);
-		heatmap(f, fGridBounds, fInputMin, fInputMax);
-		heatmap(outputU, outputUGridBounds, outputMin, outputMax);
+		heatmap("boundary conditions", inputU, inputUGridBounds, uInputMin, uInputMax);
+		heatmap("f", f, fGridBounds, fInputMin, fInputMax);
+		heatmap("output", outputU, outputUGridBounds, calculatedOutputMin, calculatedOutputMax);
 
 		cursorPlotPos = Vec2(ImPlot::GetPlotMousePos().x, ImPlot::GetPlotMousePos().y);
 		ImPlot::EndPlot();
@@ -117,7 +117,7 @@ void PoissonEquationDemo::update() {
 			const auto onBoundary = gridPos->x == 0 || gridPos->y == 0 || gridPos->x == inputU.sizeX() - 1 || gridPos->y == inputU.sizeY() - 1;
 			if (inputHeld && onBoundary) {
 				auto& value = inputU(gridPos->x, gridPos->y);
-				value = valueToWrite;
+				value = uInputValueToWrite;
 				/*value += dt * 2.0f;
 				value = std::clamp(value, minValue, maxValue);*/
 			}
@@ -126,10 +126,9 @@ void PoissonEquationDemo::update() {
 	{
 		auto gridPos = positionToGridPosition(cursorPlotPos, fGridBounds, f.size());
 		if (gridPos.has_value() && inputHeld) {
-			auto& value = f(gridPos->x, gridPos->y);
-			value = valueToWrite;
-
-			fillCircle(f, *gridPos, radius, valueToWrite);
+			/*auto& value = f(gridPos->x, gridPos->y);
+			value = fValueToWrite;*/
+			fillCircle(f, *gridPos, radius, fValueToWrite);
 			/*value += dt * 2.0f;
 			value = std::clamp(value, minValue, maxValue);*/
 		}
@@ -150,28 +149,45 @@ void PoissonEquationDemo::update() {
 		}
 
 		solvePoissonEquation(matrixViewFromConstMatrix(f), matrixViewFromMatrix(outputU), inputUGridBounds);
+		calculatedOutputMax = matrixMax(outputU);
+		calculatedOutputMin = matrixMin(outputU);
 	}
-
-	ImGui::InputFloat("min value", &minValue);
-	ImGui::InputFloat("max value", &maxValue);
-	ImGui::SliderFloat("value to write", &valueToWrite, minValue, maxValue);
-	ImGui::InputScalar("radius", ImGuiDataType_S64, &radius);
 	ImGui::Checkbox("display numbers", &displayNumbers);
 
-	ImGui::InputFloat("output min", &outputMin);
-	ImGui::InputFloat("output max", &outputMax);
-	ImGui::Checkbox("default output min max", &defaultOutputMinMax);
-	if (defaultOutputMinMax) {
-		outputMin = minValue;
-		outputMax = maxValue;
+	//if (ImGui::Button("open help")) {
+	//	ImGui::OpenPopup("help");
+	//}
+
+	//if (ImGui::BeginPopupModal("help")) {
+	//	ImGui::Text("use middle mouse button to draw");
+	//	ImGui::EndPopup();
+	//}
+	
+
+	{
+		ImGui::SeparatorText("boundary conditions");
+		ImGui::PushID(&inputU);
+		ImGui::InputFloat("input min", &uInputMin);
+		ImGui::InputFloat("input max", &uInputMax);
+		ImGui::SliderFloat("input value", &uInputValueToWrite, uInputMin, uInputMax);
+		if (ImGui::Button("clear")) {
+			matrixFill(inputU, 0.0f);
+		}
+		ImGui::PopID();
 	}
 
-	ImGui::InputFloat("input min", &fInputMin);
-	ImGui::InputFloat("input max", &fInputMax);
-	ImGui::Checkbox("default input min max", &defaultFInputMinMax);
-	if (defaultFInputMinMax) {
-		fInputMin = minValue;
-		fInputMax = maxValue;
+	{
+		ImGui::SeparatorText("f");
+		ImGui::PushID(&f);
+		ImGui::InputFloat("input min", &fInputMin);
+		ImGui::InputFloat("input max", &fInputMax);
+		ImGui::InputScalar("brush radius", ImGuiDataType_S64, &radius);
+		ImGui::SliderFloat("f input value to write", &fValueToWrite, fInputMin, fInputMax);
+		if (ImGui::Button("clear")) {
+			matrixFill(f, 0.0f);
+		}
+		ImGui::PopID();
+		
 	}
 
 	ImGui::End();

@@ -201,3 +201,26 @@ T matrixMax(const Matrix<T>& m) {
 	}
 	return max;
 }
+
+template<typename T>
+T matrixMin(const Matrix<T>& m) {
+	if (m.sizeX() <= 0 && m.sizeY() <= 0) {
+		return NAN;
+	}
+
+	T min = m.data()[0];
+	for (i64 i = 1; i < m.sizeX() * m.sizeY(); i++) {
+		const auto& value = m.data()[i];
+		if (value < min) {
+			min = value;
+		}
+	}
+	return min;
+}
+
+template<typename T>
+void matrixFill(Matrix<T>& m, const T& value) {
+	for (i64 i = 0; i < m.sizeX() * m.sizeY(); i++) {
+		m.data()[i] = value;
+	}
+}
