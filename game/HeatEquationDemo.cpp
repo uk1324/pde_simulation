@@ -4,7 +4,7 @@
 #include <engine/Math/Lerp.hpp>
 #include <Span.hpp>
 
-const auto INITIAL_SIZE = 40;
+const auto INITIAL_SIZE = 100;
 const auto min = 0.0f;
 const auto max = 1.0f;
 
@@ -98,18 +98,28 @@ f32 piecewiseLinearSample(Span<const Vec2> points, f32 x) {
 //	return output
 //}
 
-f32 cubicHermiteInterpolate(f32 startValue, f32 endValue, f32 startDerivative, f32 endDerivative, f32 t) {
-	// Could use Horner's method
+//f32 cubicHermiteInterpolate(f32 startValue, f32 endValue, f32 startDerivative, f32 endDerivative, f32 t) {
+//	// Could use Horner's method
+//	const auto t2 = t * t;
+//	const auto t3 = t2 * t;
+//	return
+//		(2.0f * t2 - 3.0f * t3 + 1.0f) * startValue +
+//		(t3 - 2.0f * t2 + t) * startDerivative +
+//		(t3 - t2) * endDerivative +
+//		(-2.0f * t3 + 3.0f * t2) * endValue;
+//}
+
+template<typename T, typename U>
+auto cubicHermite(T a, T va, T b, T vb, U t) -> T {
 	const auto t2 = t * t;
 	const auto t3 = t2 * t;
-	return
-		(2.0f * t2 - 3.0f * t3 + 1.0f) * startValue +
-		(t3 - 2.0f * t2 + t) * startDerivative +
-		(t3 - t2) * endDerivative +
-		(-2.0f * t3 + 3.0f * t2) * endValue;
+	return (2.0f * t3 - 3.0f * t2 + 1.0f) * a
+		+ (t3 - 2.0f * t2 + t) * va
+		+ (-2.0f * t3 + 3.0f * t2) * b
+		+ (t3 - t2) * vb;
 }
 
-f32 cubicHermiteSplineSample(Span<const Vec2> points, f32 x, f32 derivativeAtFirstPoint, f32 derivativeAtLastPoint) {
+f32 cubicHermiteSplineSample(Span<const Vec2> points, Span<const f32> derivativesAtPoints, f32 x) {
 	if (points.size() == 0.0f) {
 		return 0.0f;
 	}
@@ -123,25 +133,8 @@ f32 cubicHermiteSplineSample(Span<const Vec2> points, f32 x, f32 derivativeAtFir
 		const auto& next = points[i + 1];
 		if (x <= next.x) {
 			const auto& previous = points[i];
-
-			f32 previousDerivative;
-			if (i == 0) {
-				previousDerivative = derivativeAtFirstPoint;
-			} else {
-				const auto previousPrevious = points[i - 1];
-				previousDerivative = (previous.y - previousPrevious.y) / (previous.x - previousPrevious.x);
-			}
-
-			f32 nextDerivative;
-			if (i == n - 1) {
-				nextDerivative = derivativeAtLastPoint;
-			} else {
-				const auto nextNext = points[i + 2];
-				nextDerivative = (nextNext.y - next.y) / (nextNext.x - next.x);
-			}
-
 			const auto t = (x - previous.x) / (next.x - previous.x);
-			return cubicHermiteInterpolate(previous.y, next.y, previousDerivative, nextDerivative, t);
+			return cubicHermite(previous.y, derivativesAtPoints[i], next.y, derivativesAtPoints[i + 1], t);
 		}
 	}
 }
@@ -163,7 +156,8 @@ Span<const T> listConstSpan(const List<T>& list) {
 
 HeatEquationDemo::HeatEquationDemo() 
 	: simulationU(List<f32>::uninitialized(INITIAL_SIZE))
-	, controlPoints(List<Vec2>::empty()) {
+	, controlPoints(List<Vec2>::empty())
+	, controlPointsDerivatives(List<f32>::empty()) {
 
 	for (auto& value : simulationU) {
 		value = 0.0f;
@@ -173,11 +167,12 @@ HeatEquationDemo::HeatEquationDemo()
 		const auto t = f32(i) / f32(controlPointCount - 1);
 		const auto x = lerp(min, max, t);
 		controlPoints.add(Vec2(x, 0.0f));
+		controlPointsDerivatives.add(0.0f);
 	}
 }
 
 void HeatEquationDemo::update() {
-	const auto dt = 1.0f / 60.0f;
+	//const auto dt = 1.0f / 60.0f;
 
 	auto id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
 
@@ -202,7 +197,8 @@ void HeatEquationDemo::update() {
 
 	ImGui::Begin(initialConditionsWindowName);
 	
-	if (ImPlot::BeginPlot("##p", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
+
+	if (ImPlot::BeginPlot("##i", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
 		for (i64 i = 1; i < controlPoints.size() - 1; i++) {
 			auto& point = controlPoints[i];
 			f64 x = point.x;
@@ -223,25 +219,17 @@ void HeatEquationDemo::update() {
 				auto& current = points[i];
 				auto& next = points[i + 1];
 				const auto pointsToPutInBetween = i64(current.distanceTo(next) / 0.005f);
-				/*const auto pointsToPutInBetween = i64((abs(next.y - current.y)) / 0.005f);*/
 				for (i64 j = 1; j < pointsToPutInBetween; j++) {
 					const auto t = f32(j) / f32(pointsToPutInBetween);
 					const auto x = lerp(current.x, next.x, t);
-					/*initialConditionDisplayPoints.add(Vec2(x, piecewiseLinearSample(listConstSpan(points), x)));*/
-					initialConditionDisplayPoints.add(Vec2(x, cubicHermiteSplineSample(listConstSpan(points), x, 0.0f, 0.0f)));
+					initialConditionDisplayPoints.add(Vec2(
+						x, 
+						cubicHermiteSplineSample(listConstSpan(points), listConstSpan(controlPointsDerivatives), x)
+					));
 				}
 			}
 			initialConditionDisplayPoints.add(points[points.size() - 1]);
-			/*auto initialConditionDisplayPoints = List<Vec2>::empty();
-			for (const auto& point : points) {
-				initialConditionDisplayPoints.add(Vec2(points.x, ))
-			}*/
-
-			/*for (auto& p : RegularPartition<f32>(initialConditionsDisplayPoints.size(), min, max)) {
-				initialConditionsDisplayPoints[p.i] = Vec2(p.x, piecewiseLinearSample(listConstSpan(points), p.x));
-			}*/
 			plotVec2Line("initial conditions graph", listConstSpan(initialConditionDisplayPoints));
-			//plotVec2Scatter("initial conditions graph", listConstSpan(initialConditionDisplayPoints));
 		}
 
 		ImPlot::EndPlot();
@@ -250,14 +238,45 @@ void HeatEquationDemo::update() {
 	ImGui::End();
 
 	ImGui::Begin(simulationWindowName);
+	if (ImPlot::BeginPlot("##s", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
+		auto displayPoints = List<Vec2>::empty();
+		for (const auto& p : RegularPartition<f32>(simulationU.size(), min, max)) {
+			displayPoints.add(Vec2(p.x, simulationU[p.i]));
+		}
+		plotVec2Line("u", listConstSpan(displayPoints));
+
+		ImPlot::EndPlot();
+	}
 
 	ImGui::End();
+
+	const auto dx = (max - min) / simulationU.size();
 
 	ImGui::Begin(settingsWindowName);
+	if (ImGui::Button("simulate")) {
+		auto points = controlPoints.clone();
+		std::ranges::sort(points, [](Vec2 a, Vec2 b) { return a.x < b.x; });
 
+		for (const auto& p : RegularPartition<f32>(simulationU.size(), min, max)) {
+			simulationU[p.i] = cubicHermiteSplineSample(listConstSpan(points), listConstSpan(controlPointsDerivatives), p.x);
+		}
+	}
+	ImGui::SliderFloat("alpha", &alpha, 0.01f, 2.0f, "%.6f", ImGuiSliderFlags_NoRoundToFormat);
+	ImGui::SliderFloat("dt", &dt, 0.001f, 0.1f, "%.6f", ImGuiSliderFlags_NoRoundToFormat);
+
+	ImGui::Text("v = %g", alpha * alpha * dt / (dx * dx));
+	ImGui::Text("v has to be below 0.5 for the solver to be stable");
 	ImGui::End();
-}
 
+	{
+		auto oldSimulationU = simulationU.clone();
+		const auto c0 = 1.0f - ((2.0f * alpha * alpha * dt) / (dx * dx));
+		const auto c1 = alpha * alpha * dt / (dx * dx);
+		for (i64 i = 1; i < simulationU.size() - 1; i++) {
+			simulationU[i] = c0 * oldSimulationU[i] + c1 * (oldSimulationU[i + 1] + oldSimulationU[i - 1]);
+		}
+	}
+}
 
 bool HeatEquationDemo::firstFrame = true;
 

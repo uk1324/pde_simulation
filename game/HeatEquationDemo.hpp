@@ -10,7 +10,10 @@ struct HeatEquationDemo {
 
 	void update();
 
-	//i64 size;
 	List<f32> simulationU;
 	List<Vec2> controlPoints;
+	List<f32> controlPointsDerivatives;
+
+	f32 alpha = 0.1f;
+	f32 dt = 1.0f / 600.0f;
 };
