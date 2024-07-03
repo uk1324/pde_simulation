@@ -1,4 +1,4 @@
-add_executable(simulation "main.cpp" "MainLoop.cpp" "PoissonEquationSolver.cpp" "PoissonEquationDemo.cpp" "Textures.cpp")
+add_executable(simulation "main.cpp" "MainLoop.cpp" "PoissonEquationSolver.cpp" "PoissonEquationDemo.cpp" "Textures.cpp" "HeatEquationDemo.cpp" "PlotUtils.cpp")
 
 target_link_libraries(simulation PUBLIC engine)
 

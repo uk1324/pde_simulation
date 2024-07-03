@@ -23,7 +23,8 @@ void MainLoop::update() {
 	glViewport(0, 0, Window::size().x, Window::size().y);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	demo.update();
+	//demo.update();
+	heatEquation.update();
 
 	//waveShader.use();
 	//std::vector<WaveInstance> instances;

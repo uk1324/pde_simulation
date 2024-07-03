@@ -7,6 +7,7 @@
 #include <Array2d.hpp>
 #include <game/PoissonEquationSolver.hpp>
 #include <game/PoissonEquationDemo.hpp>
+#include <game/HeatEquationDemo.hpp>
 
 struct MainLoop {
 	MainLoop();
@@ -19,6 +20,7 @@ struct MainLoop {
 	ShaderProgram& waveShader;
 
 	PoissonEquationDemo demo;
+	HeatEquationDemo heatEquation;
 
 	Texture waveTexture;
 	Array2d<f32> data;
