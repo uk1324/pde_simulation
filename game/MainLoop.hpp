@@ -6,6 +6,7 @@
 #include <gfx/ShaderManager.hpp>
 #include <Array2d.hpp>
 #include <game/PoissonEquationSolver.hpp>
+#include <game/PoissonEquationDemo.hpp>
 
 struct MainLoop {
 	MainLoop();
@@ -14,10 +15,10 @@ struct MainLoop {
 
 	Gfx2d gfx;
 
-	PoissonEquationSolver solver;
-
 	Vao waveVao;
 	ShaderProgram& waveShader;
+
+	PoissonEquationDemo demo;
 
 	Texture waveTexture;
 	Array2d<f32> data;

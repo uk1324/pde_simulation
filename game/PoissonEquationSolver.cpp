@@ -209,7 +209,7 @@ void gaussianEliminationTest() {
 // Solves Dxx u + Dyy u = f(x, y) for u
 // u has to have values on boundary values specified, the function finds the order values
 // The corner values are not used.
-void PoissonEquationSolver::solve(const MatrixView<const Float>& f, MatrixView<Float> u, const Aabb& region) {
+void solvePoissonEquation(const MatrixView<const Float>& f, MatrixView<Float> u, const Aabb& region) {
 	ASSERT(f.size() == u.size());
 	const auto n = f.sizeX() - 1;
 	const auto m = f.sizeY() - 1;
@@ -361,10 +361,90 @@ void PoissonEquationSolver::solve(const MatrixView<const Float>& f, MatrixView<F
 	//	}
 	//}
 
-	matrixPrint(matrixCopy);
-	matrixPrint(matrixTranspose(matrixCopy) - matrix);
+	/*matrixPrint(matrixCopy);
+	matrixPrint(matrixTranspose(matrixCopy) - matrix);*/
 
 	/*const auto test = matrixCopy * (*result);
 	matrixPrint(test - augmentedColumnCopy);*/
 }
 
+//void steadyStateHeatEquationTest() {
+//	PoissonEquationSolver solver;
+//	auto u = Matrix<f32>::zero(5, 5);
+//	auto f = Matrix<f32>::zero(5, 5);
+//	const auto region = Aabb(Vec2(0.0f), Vec2(0.5f));
+//	const auto regionSize = region.size();
+//	for (i64 i = 0; i < u.sizeX(); i++) {
+//		const auto x = region.min.x + (f32(regionSize.x) / (u.sizeX() - 1)) * i;
+//		u(i, 0) = 200.0f * x;
+//	}
+//	for (i64 i = 0; i < u.sizeY(); i++) {
+//		const auto y = region.min.y + (f32(regionSize.y) / f32(u.sizeY() - 1)) * (u.sizeY() - 1 - i);
+//		u(u.sizeX() - 1, i) = 200.0f * y;
+//	}
+//	solver.solve(matrixViewFromConstMatrix(f), matrixViewFromMatrix(u), region);
+//	matrixPrint(u);
+//	/*
+//	The correct output is
+//	| 0    25   50    75 100 |
+//	| 0 18.75 37.5 56.25  75 |
+//	| 0  12.5   25  37.5  50 |
+//	| 0  6.25 12.5 18.75  25 |
+//	| 0     0    0     0   0 |
+//	*/
+//	// Technically what the solver does is discretize the problem and then try to solve the discretized problem exactly. The that comes from the discretization of the partial derivatives is based on the 4th partial derivatives of u. In this case the 4th derivatives are zero so if the discretized problem is solved exacly then it's also an exact solution to the original problem.
+//	// The exact solution is 400xy
+//
+//	auto exactResult = Matrix<f32>::uninitialized(u.size());
+//	for (i64 j = 0; j < u.sizeY(); j++) {
+//		for (i64 i = 0; i < u.sizeX(); i++) {
+//			const auto x = region.min.x + (f32(regionSize.x) / (u.sizeX() - 1)) * i;
+//			const auto y = region.min.y + (f32(regionSize.y) / f32(u.sizeY() - 1)) * (u.sizeY() - 1 - j);
+//			exactResult(i, j) = 400.0f * x * y;
+//		}
+//	}
+//	matrixPrint(exactResult);
+//}
+//
+//void poissonEquationTest() {
+//	PoissonEquationSolver solver;
+//	auto u = Matrix<f32>::zero(7, 6);
+//	auto f = Matrix<f32>::zero(u.size());
+//
+//	const auto region = Aabb(Vec2(0.0f), Vec2(2.0f, 1.0f));
+//	const auto regionSize = region.size();
+//	for (i64 i = 0; i < u.sizeX(); i++) {
+//		const auto x = region.min.x + (f32(regionSize.x) / (u.sizeX() - 1)) * i;
+//		u(i, 0) = exp(1.0f) * x;
+//		u(i, u.sizeY() - 1) = x;
+//	}
+//	for (i64 i = 0; i < u.sizeY(); i++) {
+//		const auto y = region.min.y + (f32(regionSize.y) / f32(u.sizeY() - 1)) * (u.sizeY() - 1 - i);
+//		u(u.sizeX() - 1, i) = 2.0f * exp(y);
+//		u(0, i) = 0;
+//	}
+//
+//	for (i64 j = 0; j < u.sizeY(); j++) {
+//		for (i64 i = 0; i < u.sizeX(); i++) {
+//			const auto x = region.min.x + (f32(regionSize.x) / (u.sizeX() - 1)) * i;
+//			const auto y = region.min.y + (f32(regionSize.y) / f32(u.sizeY() - 1)) * (u.sizeY() - 1 - j);
+//			f(i, j) = x * exp(y);
+//		}
+//	}
+//
+//	solver.solve(matrixViewFromConstMatrix(f), matrixViewFromMatrix(u), region);
+//	matrixPrint(u);
+//
+//
+//	auto exactResult = Matrix<f32>::uninitialized(u.size());
+//	for (i64 j = 0; j < u.sizeY(); j++) {
+//		for (i64 i = 0; i < u.sizeX(); i++) {
+//			const auto x = region.min.x + (f32(regionSize.x) / (u.sizeX() - 1)) * i;
+//			const auto y = region.min.y + (f32(regionSize.y) / f32(u.sizeY() - 1)) * (u.sizeY() - 1 - j);
+//			exactResult(i, j) = x * exp(y);
+//		}
+//	}
+//
+//	matrixPrint(exactResult);
+//	matrixPrint(exactResult - u);
+//}
