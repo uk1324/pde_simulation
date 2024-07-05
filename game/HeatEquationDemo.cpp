@@ -3,6 +3,7 @@
 #include <imgui/implot.h>
 #include <engine/Math/Lerp.hpp>
 #include <Span.hpp>
+#include <engine/Input/Input.hpp>
 
 const auto INITIAL_SIZE = 100;
 const auto min = 0.0f;
@@ -173,37 +174,42 @@ HeatEquationDemo::HeatEquationDemo()
 
 void HeatEquationDemo::update() {
 	//const auto dt = 1.0f / 60.0f;
+	//ImGui::GetStyle().WindowMenuButtonPosition = ImGuiDir_None;
+	//ImGuiStyle::WindowMenuButtonPosition
+	//ImGui::PushStyleVar(ImGuiStyle::WindowMenuButtonPosition, )
+	auto id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(), ImGuiDockNodeFlags_NoTabBar);
 
-	auto id = ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-
-	const auto initialConditionsWindowName = "initial conditions";
-	const auto simulationWindowName = "simulation";
+	const auto plotWindowName = "plot";
 	const auto settingsWindowName = "settings";
 	if (firstFrame) {
 		ImGui::DockBuilderRemoveNode(id);
 		ImGui::DockBuilderAddNode(id);
 
 		const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.2f, nullptr, &id);
-		const auto topId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Up, 0.5f, nullptr, &id);
-		const auto bottomId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.5f, nullptr, &id);
+		const auto rightId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Up, 0.5f, nullptr, &id);
+		//const auto bottomId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.5f, nullptr, &id);
 
-		ImGui::DockBuilderDockWindow(initialConditionsWindowName, topId);
-		ImGui::DockBuilderDockWindow(simulationWindowName, bottomId);
+		ImGui::DockBuilderDockWindow(plotWindowName, rightId);
 		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
 
 		ImGui::DockBuilderFinish(id);
 		firstFrame = false;
 	}
 
-	ImGui::Begin(initialConditionsWindowName);
-	
-
-	if (ImPlot::BeginPlot("##i", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
+	ImGui::Begin(plotWindowName, nullptr, ImGuiWindowFlags_NoTitleBar);
+	if (ImPlot::BeginPlot("##i", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal | ImPlotFlags_NoMouseText)) {
+		ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+		static bool controlPointsEnabled = true;
+		if (Input::isKeyDown(KeyCode::P)) {
+			controlPointsEnabled = !controlPointsEnabled;
+		}
 		for (i64 i = 1; i < controlPoints.size() - 1; i++) {
 			auto& point = controlPoints[i];
 			f64 x = point.x;
 			f64 y = point.y;
-			ImPlot::DragPoint(i, &x, &y, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 4.0f, ImPlotDragToolFlags_Delayed);
+			if (controlPointsEnabled) {
+				ImPlot::DragPoint(i, &x, &y, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 4.0f, ImPlotDragToolFlags_Delayed);
+			}
 			point.x = std::clamp(f32(x), min, max);
 			point.y = y;
 		}
@@ -229,7 +235,15 @@ void HeatEquationDemo::update() {
 				}
 			}
 			initialConditionDisplayPoints.add(points[points.size() - 1]);
-			plotVec2Line("initial conditions graph", listConstSpan(initialConditionDisplayPoints));
+			plotVec2Line("initial conditions", listConstSpan(initialConditionDisplayPoints));
+		}
+
+		{
+			auto displayPoints = List<Vec2>::empty();
+			for (const auto& p : RegularPartition<f32>(simulationU.size(), min, max)) {
+				displayPoints.add(Vec2(p.x, simulationU[p.i]));
+			}
+			plotVec2Line("u", listConstSpan(displayPoints));
 		}
 
 		ImPlot::EndPlot();
@@ -237,23 +251,23 @@ void HeatEquationDemo::update() {
 
 	ImGui::End();
 
-	ImGui::Begin(simulationWindowName);
-	if (ImPlot::BeginPlot("##s", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
-		auto displayPoints = List<Vec2>::empty();
-		for (const auto& p : RegularPartition<f32>(simulationU.size(), min, max)) {
-			displayPoints.add(Vec2(p.x, simulationU[p.i]));
-		}
-		plotVec2Line("u", listConstSpan(displayPoints));
+	//ImGui::Begin(simulationWindowName);
+	//if (ImPlot::BeginPlot("##s", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
+	//	auto displayPoints = List<Vec2>::empty();
+	//	for (const auto& p : RegularPartition<f32>(simulationU.size(), min, max)) {
+	//		displayPoints.add(Vec2(p.x, simulationU[p.i]));
+	//	}
+	//	plotVec2Line("u", listConstSpan(displayPoints));
 
-		ImPlot::EndPlot();
-	}
+	//	ImPlot::EndPlot();
+	//}
 
-	ImGui::End();
+	//ImGui::End();
 
 	const auto dx = (max - min) / simulationU.size();
 
-	ImGui::Begin(settingsWindowName);
-	if (ImGui::Button("simulate")) {
+	ImGui::Begin(settingsWindowName, nullptr, ImGuiWindowFlags_NoTitleBar);
+	if (ImGui::Button("run simulation")) {
 		auto points = controlPoints.clone();
 		std::ranges::sort(points, [](Vec2 a, Vec2 b) { return a.x < b.x; });
 
@@ -264,8 +278,8 @@ void HeatEquationDemo::update() {
 	ImGui::SliderFloat("alpha", &alpha, 0.01f, 2.0f, "%.6f", ImGuiSliderFlags_NoRoundToFormat);
 	ImGui::SliderFloat("dt", &dt, 0.001f, 0.1f, "%.6f", ImGuiSliderFlags_NoRoundToFormat);
 
-	ImGui::Text("v = %g", alpha * alpha * dt / (dx * dx));
-	ImGui::Text("v has to be below 0.5 for the solver to be stable");
+	ImGui::TextWrapped("v = %g", alpha * alpha * dt / (dx * dx));
+	ImGui::TextWrapped("v has to be below 0.5 for the solver to be stable");
 	ImGui::End();
 
 	{
@@ -275,6 +289,25 @@ void HeatEquationDemo::update() {
 		for (i64 i = 1; i < simulationU.size() - 1; i++) {
 			simulationU[i] = c0 * oldSimulationU[i] + c1 * (oldSimulationU[i + 1] + oldSimulationU[i - 1]);
 		}
+		/*
+		Stability of forward difference
+		Each step of the method can be written as a multiplication with a matrix A.
+		If there is an error e in the discretization of v. Let the discretized value be v' = v + e.
+		Then after the step Av' = A(v + e) + Av + Ae.
+		The error increases or decreases exponentially.
+		If the aboslute value of an eigenvalue of A is bigger than 1 then it increases.
+
+		You could probably analyse the things in the frequency domain maybe.
+		The eigenvalues are basically sines waves of varying frequencies (like in the continous heat equation). 
+		When the solver blows up there is an increase of high frequency components.
+		Some eigenvalues are negative which causes the values to flip signs for positive to negative when the solution is blowing up.
+
+		Derivation of eigenvalues and eigenvectors
+		https://www.stat.uchicago.edu/~lekheng/courses/302/notes14.pdf
+
+		https://math.stackexchange.com/questions/955168/how-to-find-the-eigenvalues-of-tridiagonal-toeplitz-matrix
+
+		*/
 	}
 }
 

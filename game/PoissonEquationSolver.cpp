@@ -1,5 +1,6 @@
 #include "PoissonEquationSolver.hpp"
 #include "MatrixUtils.hpp"
+#include "MatrixMath.hpp"
 /*
 
 Poisson's equation is
@@ -58,6 +59,63 @@ M u(i, 1) - u(i + 1, 1) - u(i - 1, 1) - L u(i, 2) = N f(i, 1) + L u(i, 0)
 if i in { 2, ... n - 2 }, j = m - 1
 M u(i, m - 1) - u(i + 1, m - 1) - u(i - 1, m - 1) - L u(i, m) - L u(i, m - 2) = N f(i, m - 1)
 M u(i, m - 1) - u(i + 1, m - 1) - u(i - 1, m - 1) - L u(i, m - 2) = N f(i, m - 1) + L u(i, m)
+
+
+Derivation of matrix form (not used for computation only for proofs).
+l = i + (j - 1) * (n - 1) - 1
+
+M u(i + (j - 1) * (n - 1) - 1) - u(i + 1 + (j - 1) * (n - 1) - 1) - u(i - 1 + (j - 1) * (n - 1) - 1) - L u(i + (j + 1 - 1) * (n - 1) - 1) - L u(i + (j - 1 - 1) * (n - 1) - 1)
+M u(i + (j - 1) * (n - 1) - 1) - u(i + (j - 1) * (n - 1)) - u(i - 2 + (j - 1) * (n - 1)) - L u(i + j * (n - 1) - 1) - L u(i + (j - 2) * (n - 1) - 1)
+{
+M u(i + j(n - 1) - (n - 1) - 1) - u(i + j(n - 1) - (n - 1)) - u(i - 2 + j(n - 1) - (n - 1)) - L u(i + j * (n - 1) - 1) - L u(i + j(n - 1) - 2(n - 1) - 1)
+M u(i + j(n - 1) - n + 1 - 1) - u(i + j(n - 1) - n + 1) - u(i - 2 + j(n - 1) - n + 1) - L u(i + j * (n - 1) - 1) - L u(i + j(n - 1) - 2n + 2 - 1)
+M u(i - n + j(n - 1)) - u(i - n + 1 + j(n - 1)) - u(i - n - 1 + j(n - 1)) - L u(i - 1 + j * (n - 1)) - L u(i - 2n + 1 + j(n - 1))
+}
+
+M u(i + (j - 1) * (n - 1) - 1) - u(i + (j - 1) * (n - 1)) - u(i - 2 + (j - 1) * (n - 1)) - L u(i + j * (n - 1) - (n - 1) + (n - 1)  - 1) - L u(i + (j - 1) * (n - 1) - (n - 1) - 1)
+M u(i + (j - 1) * (n - 1) - 1) - u(i + (j - 1) * (n - 1)) - u(i - 2 + (j - 1) * (n - 1)) - L u(i + (j - 1) * (n - 1) + (n - 1) - 1) - L u(i + (j - 1) * (n - 1) - (n - 1) - 1)
+M u(i + (j - 1) * (n - 1) - 1) - u(i + (j - 1) * (n - 1)) - u(i - 2 + (j - 1) * (n - 1)) - L u(i + (j - 1) * (n - 1) + n - 2) - L u(i + (j - 1) * (n - 1) + n)
+
+let o = (j - 1) * (n - 1)
+M u(i - 1 + o) - u(i + o) - u(i - 2 + o) - L u(i + n - 2 + o) - L u(i + n + o)
+let x = i + 1, y = j + 1 then o = i * (n - 1)
+
+M u(x + o) - u(x + 1 + o) - u(x - 1 + o) - L u(x + n - 1 + o) - L u(x + n + 1 + o)
+
+// Most of what is below is wrong. The boundary condtions are not that simple. Also not sure if the above calculations are correct, because the number of zeros between -1s and -Ls should be different I think, not sure.
+Not a proof {
+Ignoring the zeros the matrix looks kinda like this (not accouting for boundary conditions)
+12321
+ 12321
+  12321
+   12321
+	12321
+	 12321
+	  12321
+With first 2 columns cut off, because of boundary conditions
+
+321
+2321
+12321
+ 12321
+  12321
+   12321
+    12321
+Which is symmetric
+}
+
+Rows of the matrix have the form
+[{ 0s }  -L { 0: n - 1 times } -1 M -1 { 0: n - 1 times } L { 0s }]
+
+For n = m = 4
+[M-1  0   0   0  -L  0 0   0 0]
+[0    M-1 0   0   0 -L 0   0 0]
+[0    0   M-1 0   0  0 -L  0 0]
+[0    0   0   M-1 0  0  0 -L 0]
+[-L 
+The matrix is made of submatrices that lie on the diagonal and negated identity matrices times L below and above the block diagonal. Each matrix is (n - 1) x (n - 1), because this is how many points it takes for j to increase by 1.
+
+
 */
 
 enum class SolveGaussianEliminationOutput {
@@ -69,7 +127,7 @@ using Float = f32;
 // solves mx = b for x
 // the matrix m has to be square
 // outputs the result into x
-SolveGaussianEliminationOutput solveGaussianElimination(MatrixView<Float> m, MatrixView<Float> b, MatrixView<Float> x) {
+SolveGaussianEliminationOutput solveGaussianElimination(View2d<Float> m, View2d<Float> b, View2d<Float> x) {
 	ASSERT(m.sizeX() == m.sizeY());
 	const auto n = m.sizeX();
 	ASSERT(b.sizeX() == 1);
@@ -130,7 +188,7 @@ SolveGaussianEliminationOutput solveGaussianElimination(MatrixView<Float> m, Mat
 	return SolveGaussianEliminationOutput::SUCCESS;
 }
 
-void solveGaussSeidel(MatrixView<Float> m, MatrixView<Float> b, MatrixView<Float> x) {
+void solveGaussSeidel(View2d<Float> m, View2d<Float> b, View2d<Float> x) {
 	const auto n = m.sizeY();
 	ASSERT(b.sizeX() == 1);
 	ASSERT(b.sizeY() == n);
@@ -155,12 +213,12 @@ void solveGaussSeidel(MatrixView<Float> m, MatrixView<Float> b, MatrixView<Float
 	}
 }
 
-SolveGaussianEliminationOutput solveGaussianElimination(Matrix<Float>& m, Matrix<Float>& b, Matrix<Float>& x) {
-	return solveGaussianElimination(matrixViewFromMatrix(m), matrixViewFromMatrix(b), matrixViewFromMatrix(x));
+SolveGaussianEliminationOutput solveGaussianElimination(Array2d<Float>& m, Array2d<Float>& b, Array2d<Float>& x) {
+	return solveGaussianElimination(view2d(m), view2d(b), view2d(x));
 }
 
-std::optional<Matrix<Float>> solveGaussianElimination(Matrix<Float>& m, Matrix<Float>& b) {
-	auto x = Matrix<Float>::uninitialized(b.size());
+std::optional<Array2d<Float>> solveGaussianElimination(Array2d<Float>& m, Array2d<Float>& b) {
+	auto x = Array2d<Float>::uninitialized(b.size());
 	const auto result = solveGaussianElimination(m, b, x);
 	if (result == SolveGaussianEliminationOutput::SUCCESS) {
 		return x;
@@ -170,13 +228,13 @@ std::optional<Matrix<Float>> solveGaussianElimination(Matrix<Float>& m, Matrix<F
 
 void gaussianEliminationTest() {
 	srand(136);
-	auto m = Matrix<Float>::uninitialized(5, 5);
+	auto m = Array2d<Float>::uninitialized(5, 5);
 	for (i64 j = 0; j < m.sizeY(); j++) {
 		for (i64 i = 0; i < m.sizeX(); i++) {
 			m(i, j) = Float(rand()) / Float(RAND_MAX);
 		}
 	}
-	auto b = Matrix<Float>::uninitialized(1, 5);
+	auto b = Array2d<Float>::uninitialized(1, 5);
 	for (i64 i = 0; i < m.sizeY(); i++) {
 		const auto a = Float(rand());
 		const auto c = a / Float(RAND_MAX);
@@ -186,7 +244,7 @@ void gaussianEliminationTest() {
 	matrixPrint(m);
 	matrixPrint(b);
 
-	auto x = Matrix<Float>::uninitialized(1, 5);
+	auto x = Array2d<Float>::uninitialized(1, 5);
 	{
 		auto mTmp = m.clone();
 		auto bTmp = b.clone();
@@ -209,7 +267,7 @@ void gaussianEliminationTest() {
 // Solves Dxx u + Dyy u = f(x, y) for u
 // u has to have values on boundary values specified, the function finds the order values
 // The corner values are not used.
-void solvePoissonEquation(const MatrixView<const Float>& f, MatrixView<Float> u, const Aabb& region) {
+void solvePoissonEquation(const View2d<const Float>& f, View2d<Float> u, const Aabb& region) {
 	ASSERT(f.size() == u.size());
 	const auto n = f.sizeX() - 1;
 	const auto m = f.sizeY() - 1;
@@ -237,13 +295,13 @@ void solvePoissonEquation(const MatrixView<const Float>& f, MatrixView<Float> u,
 	};
 
 	const auto matrixSize = (n - 1) * (m - 1);
-	auto matrix = Matrix<Float>::uninitialized(matrixSize, matrixSize);
+	auto matrix = Array2d<Float>::uninitialized(matrixSize, matrixSize);
 	for (i32 i = 0; i < matrix.sizeX(); i++) {
 		for (i32 j = 0; j < matrix.sizeY(); j++) {
 			matrix(i, j) = Float(0);
 		}
 	}
-	auto augmentedColumn = Matrix<Float>::uninitialized(1, matrixSize);
+	auto augmentedColumn = Array2d<Float>::uninitialized(1, matrixSize);
 
 	i32 row = 0;
 	auto set = [&](i32 i, i32 j, Float value) {

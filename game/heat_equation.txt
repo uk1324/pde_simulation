@@ -1,0 +1,9 @@
+For the laplacian the eigenvalue, eigenvector pairs are c * sin(nx), -n^2 (The phase can change depending on the boundary conditions) where c is some real number (The constant function is also an eigenvector). The eigenvectors are orthogonal and you can write a functions as sums of them. Let f(x, 0) = Sum(n = 1, inf) an sin(nx).
+The the heat equation is 
+Dt f = alpha^2 * Dxx Sum(n = 1, inf) an sin(nx) = (under some conditions) alpha^2 * Sum(n = 1, inf) -n^2 an sin(nx).
+Because -n^2 is always negative the heat equation just causes everything to be damped. The higher n the faster they get dampened. n is the frequency so the heat equation dampens the high frequencies.
+
+The eigenvalues of the discrete laplacian are 1 - 4 lambda sin(i pi / 2m)^2. i in { 0, ..., m - 1 } where lambda = alpha^2 * dt / dx^2, m is the number of points in the space discretization. For the system to be stable the absolute value of each eigenvalues has to be <= 1. If the system is stable it decays to zero otherwise you get exponential growth.
+The sine term is always positive and so is lambda. The only way for modulus of the eigenvalues to get to big for them to become negative.
+The value gets smaller as i increases. The eigenvalues correspoding to the bigger 'i's are basically sines (evaluated at discrete points) of bigger frequencies. 
+This can be seen when the solver blows up. When it begins the the high frequencies blow up first. This is because the correspond to the eigenvalues with the higher modulus.

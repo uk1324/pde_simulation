@@ -3,30 +3,20 @@
 #include "imgui/imgui_internal.h"
 #include <engine/Input/Input.hpp>
 #include <engine/Math/Aabb.hpp>
+#include "MatrixUtils.hpp"
+#include "View2dUtils.hpp"
 #include "PoissonEquationSolver.hpp"
+#include "GridUtils.hpp"
 
 const auto INITIAL_SIZE = Vec2T<i64>(40, 40);
 
 PoissonEquationDemo::PoissonEquationDemo() 
-	: inputU(Matrix<f32>::zero(INITIAL_SIZE))
-	, outputU(Matrix<f32>::zero(INITIAL_SIZE)) 
-	, f(Matrix<f32>::zero(INITIAL_SIZE))
+	: inputU(Array2d<f32>::filled(INITIAL_SIZE, 0.0f))
+	, outputU(Array2d<f32>::filled(INITIAL_SIZE, 0.0f))
+	, f(Array2d<f32>::filled(INITIAL_SIZE, 0.0f))
 	, size(INITIAL_SIZE) {
 
 	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-}
-
-std::optional<Vec2T<i64>> positionToGridPosition(Vec2 pos, const Aabb& gridBounds, Vec2T<i64> gridSize) {
-	pos -= gridBounds.min;
-	pos /= gridBounds.size();
-	pos *= Vec2(gridSize);
-	pos = pos.applied(floor);
-	auto gridPos = Vec2T<i64>(pos);
-	gridPos.y = gridSize.y - 1 - gridPos.y;
-	if (gridPos.x >= 0 && gridPos.y >= 0 && gridPos.x < gridSize.x && gridPos.y < gridSize.y) {
-		return gridPos;
-	}
-	return std::nullopt;
 }
 
 /*
@@ -72,7 +62,7 @@ void PoissonEquationDemo::update() {
 	Vec2 cursorPlotPos(0.0f);
 	//ImPlot::ShowDemoWindow();
 	if (ImPlot::BeginPlot("##p", ImVec2(-1.0f, -1.0f), ImPlotFlags_Equal)) {
-		auto heatmap = [this](const char* text, const Matrix<f32>& m, const Aabb& bounds, f32 min, f32 max) {
+		auto heatmap = [this](const char* text, const Array2d<f32>& m, const Aabb& bounds, f32 min, f32 max) {
 			ImPlot::PlotText(text, bounds.center().x, bounds.max.y + 0.05f);
 			//const char* format = nullptr; // "%.1f"
 			const char* format = displayNumbers ? "%.1f" : "";
@@ -107,7 +97,7 @@ void PoissonEquationDemo::update() {
 		int x = 5;
 	}
 
-	auto fillCircle = [](Matrix<f32>& mat, Vec2T<i64> center, i64 radius, f32 value) {
+	auto fillCircle = [](Array2d<f32>& mat, Vec2T<i64> center, i64 radius, f32 value) {
 		const auto minX = std::clamp(center.x - radius, 0ll, mat.size().x - 1);
 		const auto maxX = std::clamp(center.x + radius, 0ll, mat.size().x - 1);
 		const auto minY = std::clamp(center.y - radius, 0ll, mat.size().y - 1);
@@ -161,9 +151,9 @@ void PoissonEquationDemo::update() {
 			outputU(size.y - 1, y) = inputU(size.y - 1, y);
 		}
 
-		solvePoissonEquation(matrixViewFromConstMatrix(f), matrixViewFromMatrix(outputU), inputUGridBounds);
-		calculatedOutputMax = matrixMax(outputU);
-		calculatedOutputMin = matrixMin(outputU);
+		solvePoissonEquation(constView2d(f), view2d(outputU), inputUGridBounds);
+		calculatedOutputMax = max(outputU);
+		calculatedOutputMin = min(outputU);
 	}
 	ImGui::Checkbox("display numbers", &displayNumbers);
 
@@ -184,7 +174,7 @@ void PoissonEquationDemo::update() {
 		ImGui::InputFloat("input max", &uInputMax);
 		ImGui::SliderFloat("input value", &uInputValueToWrite, uInputMin, uInputMax);
 		if (ImGui::Button("clear")) {
-			matrixFill(inputU, 0.0f);
+			fill(inputU, 0.0f);
 		}
 		ImGui::PopID();
 	}
@@ -197,7 +187,7 @@ void PoissonEquationDemo::update() {
 		ImGui::InputScalar("brush radius", ImGuiDataType_S64, &radius);
 		ImGui::SliderFloat("f input value to write", &fValueToWrite, fInputMin, fInputMax);
 		if (ImGui::Button("clear")) {
-			matrixFill(f, 0.0f);
+			fill(f, 0.0f);
 		}
 		ImGui::PopID();
 		

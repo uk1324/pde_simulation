@@ -9,22 +9,16 @@
 Vec2 waveSize(500, 500);
 f32 cellSize = 0.01f;
 
-MainLoop::MainLoop() 
-	: gfx(Gfx2d::make())
-	, waveVao(createInstancingVao<WaveShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo))
-	, waveShader(MAKE_GENERATED_SHADER(WAVE))
-	, waveTexture(Texture::generate())
-	, data(waveSize.x, waveSize.y) {
+MainLoop::MainLoop() {
 
 }
 
 void MainLoop::update() {
 	ShaderManager::update();
-	glViewport(0, 0, Window::size().x, Window::size().y);
-	glClear(GL_COLOR_BUFFER_BIT);
 
+	game.update();
 	//demo.update();
-	heatEquation.update();
+	//heatEquation.update();
 
 	//waveShader.use();
 	//std::vector<WaveInstance> instances;
@@ -45,4 +39,10 @@ void MainLoop::update() {
 	//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, waveSize.x, waveSize.y, GL_RED, GL_FLOAT, data.data());
 
 	//drawInstances(waveVao, gfx.instancesVbo, instances, quad2dPtDrawInstances);
+}
+
+void MainLoop::render() {
+	glViewport(0, 0, Window::size().x, Window::size().y);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 }

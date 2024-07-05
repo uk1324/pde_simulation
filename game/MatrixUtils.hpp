@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MatrixView.hpp"
+#include "Array2d.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -12,7 +12,7 @@ inline size_t number_of_digits(double n) {
 }
 #include <iostream>
 template<typename T>
-void matrixPrint(const MatrixView<T>& matrix) {
+void matrixPrint(const View2d<T>& matrix) {
 	constexpr size_t nmax{ 100 };
 	size_t max_len_per_column[nmax];
 	const auto n = matrix.sizeX();
@@ -35,13 +35,13 @@ void matrixPrint(const MatrixView<T>& matrix) {
 }
 
 template<typename T>
-void matrixPrint(const Matrix<T>& matrix) {
-	matrixPrint(matrixViewFromConstMatrix(matrix));
+void matrixPrint(const Array2d<T>& matrix) {
+	matrixPrint(constView2d(matrix));
 }
 
 template<typename T>
-Matrix<T> matrixTranspose(const Matrix<T>& m) {
-	auto out = Matrix<T>::uninitialized(m.sizeY(), m.sizeX());
+Array2d<T> matrixTranspose(const Array2d<T>& m) {
+	auto out = Array2d<T>::uninitialized(m.sizeY(), m.sizeX());
 	for (i64 i = 0; i < m.sizeX(); i++) {
 		for (i64 j = 0; j < m.sizeY(); j++) {
 			out(j, i) = m(i, j);

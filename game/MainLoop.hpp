@@ -4,26 +4,22 @@
 #include <gfx2d/Camera.hpp>
 #include <engine/Graphics/Vao.hpp>
 #include <gfx/ShaderManager.hpp>
-#include <Array2d.hpp>
 #include <game/PoissonEquationSolver.hpp>
 #include <game/PoissonEquationDemo.hpp>
 #include <game/HeatEquationDemo.hpp>
+#include <game/Game.hpp>
 
 struct MainLoop {
 	MainLoop();
 
 	void update();
+	void render();
 
-	Gfx2d gfx;
+	Game game;
 
-	Vao waveVao;
-	ShaderProgram& waveShader;
-
-	PoissonEquationDemo demo;
-	HeatEquationDemo heatEquation;
-
-	Texture waveTexture;
-	Array2d<f32> data;
+	/*PoissonEquationDemo demo;
+	HeatEquationDemo heatEquation;*/
+	//Array2d<f32> data;
 
 	Camera camera;
 };

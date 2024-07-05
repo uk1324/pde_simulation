@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Matrix.hpp"
+#include "Array2d.hpp"
 
 struct PoissonEquationDemo {
 	PoissonEquationDemo();
@@ -9,9 +9,9 @@ struct PoissonEquationDemo {
 
 	static bool firstFrame;
 
-	Matrix<f32> inputU;
-	Matrix<f32> outputU;
-	Matrix<f32> f;
+	Array2d<f32> inputU;
+	Array2d<f32> outputU;
+	Array2d<f32> f;
 	Vec2T<i64> size;
 
 	i64 radius = 3;
