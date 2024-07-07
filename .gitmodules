@@ -1,3 +1,6 @@
 [submodule "engine"]
 	path = engine
 	url = https://github.com/uk1324/engine.git
+[submodule "dependencies/box2c"]
+	path = dependencies/box2c
+	url = https://github.com/erincatto/box2c.git

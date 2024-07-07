@@ -8,3 +8,4 @@ set(EXECUTABLE_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(engine)
 add_subdirectory(game)
+add_subdirectory(dependencies/box2c)

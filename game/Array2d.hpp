@@ -106,12 +106,14 @@ Array2d<T> Array2d<T>::clone() const {
 
 template<typename T>
 T& Array2d<T>::operator()(i64 x, i64 y) {
+	DEBUG_ASSERT(x >= 0 && x < sizeX_);
+	DEBUG_ASSERT(y >= 0 && y < sizeY_);
 	return data_[y * sizeX_ + x];
 }
 
 template<typename T>
 const T& Array2d<T>::operator()(i64 x, i64 y) const {
-	return data_[y * sizeX_ + x];
+	return const_cast<Array2d<T>*>(this)->operator()(x, y);
 }
 
 template<typename T>

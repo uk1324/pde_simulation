@@ -115,7 +115,7 @@ void PoissonEquationDemo::update() {
 	};
 
 	{
-		auto gridPos = positionToGridPosition(cursorPlotPos, inputUGridBounds, inputU.size());
+		auto gridPos = positionToGridPositionInGrid(cursorPlotPos, inputUGridBounds, inputU.size());
 		if (gridPos.has_value()) {
 			const auto onBoundary = gridPos->x == 0 || gridPos->y == 0 || gridPos->x == inputU.sizeX() - 1 || gridPos->y == inputU.sizeY() - 1;
 			if (inputHeld && onBoundary) {
@@ -127,7 +127,7 @@ void PoissonEquationDemo::update() {
 		}
 	}
 	{
-		auto gridPos = positionToGridPosition(cursorPlotPos, fGridBounds, f.size());
+		auto gridPos = positionToGridPositionInGrid(cursorPlotPos, fGridBounds, f.size());
 		if (gridPos.has_value() && inputHeld) {
 			/*auto& value = f(gridPos->x, gridPos->y);
 			value = fValueToWrite;*/
