@@ -3,10 +3,10 @@
 #include "imgui/imgui_internal.h"
 #include <engine/Input/Input.hpp>
 #include <engine/Math/Aabb.hpp>
-#include "MatrixUtils.hpp"
-#include "View2dUtils.hpp"
+#include "../MatrixUtils.hpp"
+#include "../View2dUtils.hpp"
 #include "PoissonEquationSolver.hpp"
-#include "GridUtils.hpp"
+#include "../GridUtils.hpp"
 
 const auto INITIAL_SIZE = Vec2T<i64>(40, 40);
 

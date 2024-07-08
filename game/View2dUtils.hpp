@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Array2d.hpp"
+#include <Array2d.hpp>
 
 template<typename T>
 T max(const View2d<const T>& v);

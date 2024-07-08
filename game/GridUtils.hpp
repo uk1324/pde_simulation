@@ -21,3 +21,6 @@ std::optional<Vec2T<i64>> positionToGridPositionInGrid(Vec2 pos, const Aabb& gri
 
 Vec2 gridPositionToCellBottomLeft(Vec2T<i64> gridPosition, Vec2 gridBoundsMin, f32 cellSize);
 Vec2 gridPositionToCellBottomLeft(i64 x, i64 y, Vec2 gridBoundsMin, f32 cellSize);
+
+Vec2 gridPositionToCellCenter(Vec2T<i64> gridPosition, Vec2 gridBoundsMin, f32 cellSize);
+Vec2 gridPositionToCellCenter(i64 x, i64 y, Vec2 gridBoundsMin, f32 cellSize);

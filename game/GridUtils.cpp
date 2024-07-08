@@ -58,6 +58,14 @@ Vec2 gridPositionToCellBottomLeft(i64 x, i64 y, Vec2 gridBoundsMin, f32 cellSize
 	return Vec2(x, y) * cellSize + gridBoundsMin;
 }
 
+Vec2 gridPositionToCellCenter(Vec2T<i64> gridPosition, Vec2 gridBoundsMin, f32 cellSize) {
+	return gridPositionToCellCenter(gridPosition.x, gridPosition.y, gridBoundsMin, cellSize);
+}
+
+Vec2 gridPositionToCellCenter(i64 x, i64 y, Vec2 gridBoundsMin, f32 cellSize) {
+	return gridPositionToCellBottomLeft(x, y, gridBoundsMin, cellSize) + Vec2(0.5f) * cellSize;
+}
+
 GridAabb::GridAabb(Vec2T<i64> min, Vec2T<i64> max) 
 	: min(min)
 	, max(max) {}

@@ -6,43 +6,13 @@
 #include <gfx2d/Quad2dPt.hpp>
 #include "MatrixUtils.hpp"
 
-Vec2 waveSize(500, 500);
-f32 cellSize = 0.01f;
-
-MainLoop::MainLoop() {
-
-}
+MainLoop::MainLoop() 
+	: renderer(GameRenderer::make())
+	, editor(Editor::make()) {}
 
 void MainLoop::update() {
 	ShaderManager::update();
 
-	game.update();
-	//demo.update();
-	//heatEquation.update();
-
-	//waveShader.use();
-	//std::vector<WaveInstance> instances;
-	//const auto size = Vec2(waveSize * cellSize);
-	//instances.push_back(WaveInstance{
-	//	.transform = camera.makeTransform(Vec2(0.0f), 0.0f, size / 2.0f)
-	//});
-	//camera.changeSizeToFitBox(size);
-	//waveShader.setTexture("waveTexture", 0, waveTexture);
-
-	//for (i32 yi = 0; yi < waveSize.y; yi++) {
-	//	for (i32 xi = 0; xi < waveSize.x; xi++) {
-	//		const auto x = xi / (waveSize.x - 1.0f);
-	//		const auto y = yi / (waveSize.y - 1.0f);
-	//		data(xi, yi) = sin(50.0 * x) * sin(30.0f * y);
-	//	}
-	//}
-	//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, waveSize.x, waveSize.y, GL_RED, GL_FLOAT, data.data());
-
-	//drawInstances(waveVao, gfx.instancesVbo, instances, quad2dPtDrawInstances);
-}
-
-void MainLoop::render() {
-	glViewport(0, 0, Window::size().x, Window::size().y);
-	glClear(GL_COLOR_BUFFER_BIT);
-
+	//game.update(renderer);
+	editor.update(renderer);
 }

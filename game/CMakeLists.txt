@@ -1,4 +1,4 @@
-add_executable(simulation "main.cpp" "MainLoop.cpp" "PoissonEquationSolver.cpp" "PoissonEquationDemo.cpp" "Textures.cpp" "HeatEquationDemo.cpp" "PlotUtils.cpp" "WaveEquationDemo.cpp" "Game.cpp" "GridUtils.cpp" "Box2d.cpp")
+add_executable(simulation "main.cpp" "MainLoop.cpp" "Demos/PoissonEquationSolver.cpp" "Demos/PoissonEquationDemo.cpp" "Textures.cpp" "Demos/HeatEquationDemo.cpp" "PlotUtils.cpp"  "Simulation.cpp" "GridUtils.cpp" "Box2d.cpp" "Editor.cpp" "GameRenderer.cpp" "Constants.cpp" "EditorActions.cpp" "EditorEntities.cpp")
 
 target_link_libraries(simulation PUBLIC engine)
 
@@ -12,6 +12,7 @@ include("../engine/codeGenTool/targetAddGenerated.cmake")
 target_link_libraries(simulation PUBLIC gfx2d)
 target_link_libraries(simulation PUBLIC box2d)
 
+target_compile_options(simulation PRIVATE /w44061)
 
 # targetAddGeneratedDependencies(simulation "../engine/gfx2d")
 targetAddGenerated(simulation ${CMAKE_CURRENT_SOURCE_DIR})

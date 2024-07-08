@@ -1,24 +1,19 @@
-#include "Game.hpp"
-#include <game/Shaders/waveData.hpp>
-#include <gfx/ShaderManager.hpp>
+#include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
 #include <engine/Math/Color.hpp>
-#include <gfx/Instancing.hpp>
 #include <gfx2d/Quad2dPt.hpp>
 #include <engine/Input/Input.hpp>
 #include <game/Textures.hpp>
 #include <engine/Window.hpp>
 #include <game/GridUtils.hpp>
 #include <game/Array2dDrawingUtils.hpp>
+#include <game/Shaders/waveData.hpp>
+#include <gfx/Instancing.hpp>
+#include <glad/glad.h>
+#include <game/Constants.hpp>
 
-
-Game::Game()
-	: gfx(Gfx2d::make())
-	, waveVao(createInstancingVao<WaveShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo))
-	, waveShader(MAKE_GENERATED_SHADER(WAVE))
-	//, simulationGridSize(10, 10)
-	, simulationGridSize(300, 200)
-	, cellSize(0.1f)
+Simulation::Simulation()
+	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
 	, u(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, u_t(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, speedSquared(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
@@ -140,7 +135,7 @@ Game::Game()
 	}
 }
 
-void Game::update() {
+void Simulation::update(GameRenderer& renderer) {
 	auto gridBounds = displayGridBounds();
 
 	const auto cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace();
@@ -181,7 +176,7 @@ void Game::update() {
 
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = gridPositionToCellBottomLeft(xi, yi, simulationGridBounds.min, cellSize) + Vec2(cellSize / 2.0f);
+						const auto cellCenter = gridPositionToCellCenter(xi, yi, simulationGridBounds.min, Constants::CELL_SIZE);
 						if (bShape_TestPoint(shapeId, cellCenter)) {
 							cellType(xi, yi) = CellType::REFLECTING_WALL;
 						}
@@ -191,7 +186,7 @@ void Game::update() {
 		}
 	}
 	{
-		const auto defaultSpeed = 30.0f * cellSize;
+		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
 		fill(speedSquared, pow(defaultSpeed, 2.0f));
 
 		for (const auto& object : transparentObjects) {
@@ -202,7 +197,7 @@ void Game::update() {
 
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = gridPositionToCellBottomLeft(xi, yi, simulationGridBounds.min, cellSize) + Vec2(cellSize / 2.0f);
+						const auto cellCenter = gridPositionToCellCenter(xi, yi, simulationGridBounds.min, Constants::CELL_SIZE);
 						if (bShape_TestPoint(shapeId, cellCenter)) {
 							speedSquared(xi, yi) = pow(defaultSpeed * 0.4, 2.0f);
 						}
@@ -212,12 +207,9 @@ void Game::update() {
 		}
 	}
 
-	
-
-
 	waveSimulationUpdate();
 
-	render();
+	render(renderer);
 }
 
 /*
@@ -236,7 +228,7 @@ Could use an implicit method for the rhs. If 1. is used then you could calculate
 
 For the time discretization I will use forward euler twice. I am not using a central difference approximation even though it has less error, because it requires values from the past frame. This might cause issues when the boundary conditions change between frames.
 */
-void Game::waveSimulationUpdate() {
+void Simulation::waveSimulationUpdate() {
 	for (i32 yi = 0; yi < simulationGridSize.y; yi++) {
 		for (i32 xi = 0; xi < simulationGridSize.x; xi++) {
 			switch (cellType(xi, yi)) {
@@ -252,7 +244,7 @@ void Game::waveSimulationUpdate() {
 
 	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
-			const auto laplacianU = (u(xi + 1, yi) + u(xi - 1, yi) + u(xi, yi + 1) + u(xi, yi - 1) - 4.0f * u(xi, yi)) / (cellSize * cellSize);
+			const auto laplacianU = (u(xi + 1, yi) + u(xi - 1, yi) + u(xi, yi + 1) + u(xi, yi - 1) - 4.0f * u(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);
 			u_t(xi, yi) += (laplacianU * speedSquared(xi, yi)) * dt;
 		}
 	}
@@ -269,9 +261,9 @@ void Game::waveSimulationUpdate() {
 	}
 }
 
-void Game::render() {
+void Simulation::render(GameRenderer& renderer) {
 	camera.aspectRatio = Window::aspectRatio();
-	gfx.camera = camera;
+	renderer.gfx.camera = camera;
 
 	glViewport(0, 0, Window::size().x, Window::size().y);
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -298,56 +290,54 @@ void Game::render() {
 		}
 		updatePixelTexture(displayGrid.data(), displayGrid.sizeX(), displayGrid.sizeY());
 
-		const auto gridBoundsSize = displayGridBounds().size();
-		waveShader.use();
+		const auto displayGridBounds = this->displayGridBounds();
+		const auto displayGridBoundsSize = displayGridBounds.size();
+		renderer.waveShader.use();
 		const WaveInstance display{
-			.transform = camera.makeTransform(Vec2(0.0f), 0.0f, gridBoundsSize / 2.0f)
+			.transform = camera.makeTransform(displayGridBounds.center(), 0.0f, displayGridBounds.size() / 2.0f)
 		};
-		camera.changeSizeToFitBox(gridBoundsSize);
-		waveShader.setTexture("waveTexture", 0, displayTexture);
-		drawInstances(waveVao, gfx.instancesVbo, View<const WaveInstance>(&display, 1), quad2dPtDrawInstances);
+		camera.changeSizeToFitBox(displayGridBoundsSize);
+		renderer.waveShader.setTexture("waveTexture", 0, displayTexture);
+		drawInstances(renderer.waveVao, renderer.gfx.instancesVbo, View<const WaveInstance>(&display, 1), quad2dPtDrawInstances);
 	}
 
 	for (const auto& object : objects) {
 		b2Vec2 position = b2Body_GetPosition(object.id);
 		f32 rotation = b2Body_GetAngle(object.id);
-		gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::WHITE);
+		renderer.gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::WHITE);
 	}
 
 	for (const auto& object : transparentObjects) {
 		b2Vec2 position = b2Body_GetPosition(object.b2Id);
 		f32 rotation = b2Body_GetAngle(object.b2Id);
-		gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::BLACK);
+		renderer.gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::BLACK);
 	}
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	gfx.drawLines();
-	gfx.drawCircles();
+	renderer.gfx.drawLines();
+	renderer.gfx.drawCircles();
 	glDisable(GL_BLEND);
 }
 
-Aabb Game::displayGridBounds() const {
-	const auto viewSize = Vec2(displayGrid.size()) * cellSize;
-	const auto halfViewSize = viewSize / 2.0f;
-	auto gridBounds = Aabb(-halfViewSize, halfViewSize);
-	return gridBounds;
+Aabb Simulation::displayGridBounds() const {
+	return Constants::gridBounds(displayGrid.size());
 }
 
-Aabb Game::simulationGridBounds() const {
-	const auto viewSize = Vec2(simulationGridSize) * cellSize;
-	const auto halfViewSize = viewSize / 2.0f;
-	auto gridBounds = Aabb(-halfViewSize, halfViewSize);
-	return gridBounds;
+Aabb Simulation::simulationGridBounds() const {
+	auto bounds = displayGridBounds();
+	bounds.min -= Vec2(Constants::CELL_SIZE);
+	bounds.min += Vec2(Constants::CELL_SIZE);
+	return bounds;
 }
 
-void Game::getShapes(b2BodyId body) {
+void Simulation::getShapes(b2BodyId body) {
 	const auto shapeCount = b2Body_GetShapeCount(body);
 	getShapesResult.resizeWithoutInitialization(shapeCount);
 	b2Body_GetShapes(body, getShapesResult.data(), shapeCount);
 }
 
-void Game::updateMouseJoint(Vec2 cursorPos, bool inputIsUp, bool inputIsDown) {
+void Simulation::updateMouseJoint(Vec2 cursorPos, bool inputIsUp, bool inputIsDown) {
 	struct QueryContext {
 		b2Vec2 point;
 		b2BodyId bodyId = b2_nullBodyId;

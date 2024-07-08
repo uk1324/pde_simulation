@@ -1,0 +1,13 @@
+import "../../engine/gfx2d/Vertex2dPt.data";
+
+shader Grid {
+	vertexStruct = Vertex2dPt;
+	vertOut = {
+		vec2 worldPosition;
+	};
+	fragInstance = {
+		Mat3x2 clipToWorld;
+		float cameraZoom;
+		float smallCellSize;
+	};
+}

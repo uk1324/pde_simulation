@@ -4,18 +4,20 @@
 #include <gfx2d/Camera.hpp>
 #include <engine/Graphics/Vao.hpp>
 #include <gfx/ShaderManager.hpp>
-#include <game/PoissonEquationSolver.hpp>
-#include <game/PoissonEquationDemo.hpp>
-#include <game/HeatEquationDemo.hpp>
-#include <game/Game.hpp>
+#include <game/Demos/PoissonEquationSolver.hpp>
+#include <game/Demos/PoissonEquationDemo.hpp>
+#include <game/Demos/HeatEquationDemo.hpp>
+#include <game/Simulation.hpp>
+#include <game/Editor.hpp>
 
 struct MainLoop {
 	MainLoop();
 
 	void update();
-	void render();
 
-	Game game;
+	GameRenderer renderer;
+	Editor editor;
+	Simulation game;
 
 	/*PoissonEquationDemo demo;
 	HeatEquationDemo heatEquation;*/

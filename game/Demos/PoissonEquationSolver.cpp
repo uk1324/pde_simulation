@@ -1,6 +1,6 @@
 #include "PoissonEquationSolver.hpp"
-#include "MatrixUtils.hpp"
-#include "MatrixMath.hpp"
+#include "../MatrixUtils.hpp"
+#include "../MatrixMath.hpp"
 /*
 
 Poisson's equation is
