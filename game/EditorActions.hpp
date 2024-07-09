@@ -10,6 +10,12 @@ struct EditorActionCreateEntity {
 	EditorEntityId id;
 };
 
+struct EditorActionDestroyEntity {
+	EditorActionDestroyEntity(EditorEntityId id);
+
+	EditorEntityId id;
+};
+
 struct EditorActionSelectionChange {
 	EditorActionSelectionChange(View<EditorEntityId> oldSelection, View<EditorEntityId> newSelection);
 
@@ -19,16 +25,19 @@ struct EditorActionSelectionChange {
 
 enum class EditorActionType {
 	CREATE_ENTITY,
+	DESTROY_ENTITY,
 	SELECTION_CHANGE,
 };
 
 struct EditorAction {
 	union {
 		EditorActionCreateEntity createEntity;
+		EditorActionDestroyEntity destoryEntity;
 		EditorActionSelectionChange selectionChange;
 	};
-	EditorAction(const EditorActionCreateEntity& action);
-	EditorAction(const EditorActionSelectionChange& action);
+	explicit EditorAction(const EditorActionCreateEntity& action);
+	explicit EditorAction(const EditorActionDestroyEntity& action);
+	explicit EditorAction(const EditorActionSelectionChange& action);
 
 	EditorActionType type;
 };

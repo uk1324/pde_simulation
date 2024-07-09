@@ -94,6 +94,10 @@ EditorAction::EditorAction(const EditorActionCreateEntity& action)
     : createEntity(action)
     , type(EditorActionType::CREATE_ENTITY) {}
 
+EditorAction::EditorAction(const EditorActionDestroyEntity& action)
+    : destoryEntity(action)
+    , type(EditorActionType::DESTROY_ENTITY) {}
+
 EditorAction::EditorAction(const EditorActionSelectionChange& action) 
     : selectionChange(action)
     , type(EditorActionType::SELECTION_CHANGE) {}
@@ -104,3 +108,6 @@ EditorActionCreateEntity::EditorActionCreateEntity(EditorEntityId id)
 EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> oldSelection, View<EditorEntityId> newSelection) 
     : oldSelection(oldSelection)
     , newSelection(newSelection) {}
+
+EditorActionDestroyEntity::EditorActionDestroyEntity(EditorEntityId id) 
+    : id(id) {}

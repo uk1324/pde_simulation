@@ -58,11 +58,14 @@ struct Editor {
 	std::unordered_set<EditorEntityId> hoveredOverEntities;
 	std::unordered_set<EditorEntityId> selectedEntities;
 
+	void destoryEntity(const EditorEntityId& id);
+
+	void activateEntity(const EditorEntityId& id);
+	void deactivateEntity(const EditorEntityId& id);
+
 	void destoryAction(EditorAction& action);
 	void redoAction(const EditorAction& action);
-	void redoCreateEntity(const EditorActionCreateEntity& a);
 	void undoAction(const EditorAction& action);
-	void undoCreateEntity(const EditorActionCreateEntity& a);
 	EditorActions actions;
 
 	void fullyDeleteEntity(const EditorEntityId& id);

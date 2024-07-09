@@ -112,8 +112,6 @@ void Editor::update(GameRenderer& renderer) {
 		}
 
 		if (input.cursorLeftDown && selectedEntities != hoveredOverEntities) {
-
-
 			actions.addSelectionChange(*this, selectedEntities, hoveredOverEntities);
 			selectedEntities = hoveredOverEntities;
 		}
@@ -121,9 +119,13 @@ void Editor::update(GameRenderer& renderer) {
 		//	selectedEntities.clear();
 		//}
 
-		/*if (input.deleteDown) {
-			for (auto& entity : sel)
-		}*/
+		if (input.deleteDown) {
+			actions.beginMulticommand();
+			for (auto& entity : selectedEntities) {
+				destoryEntity(entity);
+			}
+			actions.endMulticommand();
+		}
 
 		break;
 	}
@@ -222,7 +224,8 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	case RECTANGLE:
 		break;
-	default:
+	
+	case SELECT:
 		break;
 	}
 
@@ -261,10 +264,16 @@ void Editor::destoryAction(EditorAction& action) {
 		break;
 	}
 
+	case DESTROY_ENTITY: {
+		fullyDeleteEntity(action.destoryEntity.id);
+		break;
+	}
+
 	case SELECTION_CHANGE: {
 		actions.freeSelectionChange(action.selectionChange);
 		break;
 	}
+
 	}
 }
 
@@ -272,10 +281,15 @@ void Editor::redoAction(const EditorAction& action) {
 	switch (action.type) {
 		using enum EditorActionType;
 	case CREATE_ENTITY: {
-		redoCreateEntity(action.createEntity);
+		activateEntity(action.createEntity.id);
 		break;
 	}
 	
+	case DESTROY_ENTITY: {
+		deactivateEntity(action.destoryEntity.id);
+		break;
+	}
+
 	case SELECTION_CHANGE: {
 		const auto& a = action.selectionChange;
 		selectedEntities.clear();
@@ -288,21 +302,16 @@ void Editor::redoAction(const EditorAction& action) {
 	}
 }
 
-void Editor::redoCreateEntity(const EditorActionCreateEntity& a) {
-	switch (a.id.type) {
-		using enum EditorEntityType;
-	case REFLECTING_BODY:
-		reflectingBodies.activate(a.id.reflectingBody());
-		break;
-	
-	}
-}
-
 void Editor::undoAction(const EditorAction& action) {
 	switch (action.type) {
 		using enum EditorActionType;
 	case CREATE_ENTITY: {
-		undoCreateEntity(action.createEntity);
+		deactivateEntity(action.createEntity.id);
+		break;
+	}
+
+	case DESTROY_ENTITY: {
+		activateEntity(action.destoryEntity.id);
 		break;
 	}
 
@@ -314,15 +323,6 @@ void Editor::undoAction(const EditorAction& action) {
 		}
 		break;
 	}
-	}
-}
-
-void Editor::undoCreateEntity(const EditorActionCreateEntity& a) {
-	switch (a.id.type) {
-		using enum EditorEntityType;
-	case REFLECTING_BODY:
-		reflectingBodies.deactivate(a.id.reflectingBody());
-		break;
 	}
 }
 
@@ -352,6 +352,36 @@ void Editor::fullyDeleteEntity(const EditorEntityId& id) {
 		break;
 	}
 		
+	}
+}
+
+void Editor::activateEntity(const EditorEntityId& id) {
+	switch (id.type) {
+		using enum EditorEntityType;
+
+	case REFLECTING_BODY:
+		reflectingBodies.activate(id.reflectingBody());
+		break;
+	}
+}
+
+void Editor::deactivateEntity(const EditorEntityId& id) {
+	switch (id.type) {
+		using enum EditorEntityType;
+	case REFLECTING_BODY:
+		reflectingBodies.deactivate(id.reflectingBody());
+		break;
+	}
+}
+
+void Editor::destoryEntity(const EditorEntityId& id) {
+	actions.add(*this, EditorAction(EditorActionDestroyEntity(id)));
+	switch (id.type) {
+		using enum EditorEntityType;
+	case REFLECTING_BODY: {
+		deactivateEntity(id);
+		break;
+	}
 	}
 }
 
@@ -388,7 +418,7 @@ void Editor::createObject(EditorShape&& shape) {
  	auto body = createReflectingBody();
 	body->shape = std::move(shape);
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
-	actions.add(*this, std::move(action));
+	actions.add(*this, EditorAction(std::move(action)));
 }
 
 bool Editor::firstFrame = true;

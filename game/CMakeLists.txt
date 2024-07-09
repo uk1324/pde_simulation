@@ -12,7 +12,7 @@ include("../engine/codeGenTool/targetAddGenerated.cmake")
 target_link_libraries(simulation PUBLIC gfx2d)
 target_link_libraries(simulation PUBLIC box2d)
 
-target_compile_options(simulation PRIVATE /w44061)
+target_compile_options(simulation PRIVATE /we4062)
 
 # targetAddGeneratedDependencies(simulation "../engine/gfx2d")
 targetAddGenerated(simulation ${CMAKE_CURRENT_SOURCE_DIR})

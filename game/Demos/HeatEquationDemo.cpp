@@ -138,6 +138,8 @@ f32 cubicHermiteSplineSample(Span<const Vec2> points, Span<const f32> derivative
 			return cubicHermite(previous.y, derivativesAtPoints[i], next.y, derivativesAtPoints[i + 1], t);
 		}
 	}
+
+	return points.back().y;
 }
 
 void plotVec2Line(const char* label, const Span<const Vec2>& vs) {
