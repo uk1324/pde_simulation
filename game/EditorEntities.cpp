@@ -1,6 +1,6 @@
 #include <game/EditorEntities.hpp>
 
-EditorEntityId::EditorEntityId(EditorReflectingBodyId& id)
+EditorEntityId::EditorEntityId(const EditorReflectingBodyId& id)
 	: version(id.version())
 	, index(id.index())
 	, type(EditorEntityType::REFLECTING_BODY) {}
@@ -8,3 +8,8 @@ EditorEntityId::EditorEntityId(EditorReflectingBodyId& id)
 EditorReflectingBodyId EditorEntityId::reflectingBody() const {
 	return EditorReflectingBodyId(index, version);
 }
+
+EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
+	: center(center)
+	, radius(radius)
+	, angle(angle) {}

@@ -20,7 +20,8 @@ void main() {
 	float dVertical = abs(dot(posInCell, vec2(1.0, 0.0)));
 	float dHorizontal = abs(dot(posInCell, vec2(0.0, 1.0)));
 	float width = 0.0015 / cameraZoom;
-	float interpolationWidth = width / 5.0f;
+	width += 0.005;
+	float interpolationWidth = width / 5.0;
 	// Flip colors by making the second argument to smoothstep smaller than the first one.
 	dVertical = smoothstep(width, width - interpolationWidth, dVertical);
 	dHorizontal = smoothstep(width, width - interpolationWidth, dHorizontal);
@@ -33,5 +34,9 @@ void main() {
 	colVertical *= dVertical;
 	colHorizontal *= dHorizontal;
 
+//	vec3 gridColor = max(colVertical, colHorizontal);
+//	vec3 backgroundColor = vec3(0.294, 0.545, 0.784);
+//
+//	fragColor = vec4(mix(backgroundColor, gridColor, max(dVertical, dHorizontal)), 1);
 	fragColor = vec4(max(colVertical, colHorizontal), 1);
 }

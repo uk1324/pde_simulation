@@ -5,10 +5,11 @@
 #include <List.hpp>
 
 struct EditorCircleShape {
-	EditorCircleShape(Vec2 center, f32 radius);
+	EditorCircleShape(Vec2 center, f32 radius, f32 angle);
 
 	Vec2 center;
 	f32 radius;
+	f32 angle;
 };
 
 struct EditorPolygonShape {
@@ -56,7 +57,7 @@ struct EditorEntityId {
 	u32 index;
 	u32 version;
 
-	explicit EditorEntityId(EditorReflectingBodyId& id);
+	explicit EditorEntityId(const EditorReflectingBodyId& id);
 
 	EditorReflectingBodyId reflectingBody() const;
 
@@ -73,5 +74,4 @@ namespace std {
 			return std::hash<i32>()(key.index) * std::hash<i32>()(key.version);
 		}
 	};
-
 }

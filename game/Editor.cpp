@@ -48,6 +48,8 @@ void Editor::update(GameRenderer& renderer) {
 		.cursorRightDown = Input::isMouseButtonDown(MouseButton::RIGHT),
 		.undoDown = false,
 		.redoDown = false,
+		.ctrlHeld = Input::isKeyHeld(KeyCode::LEFT_CONTROL),
+		.deleteDown = Input::isKeyDown(KeyCode::DELETE)
 	};
 
 	if (Input::isKeyHeld(KeyCode::LEFT_CONTROL) && Input::isKeyDownWithAutoRepeat(KeyCode::Z)) {
@@ -102,11 +104,27 @@ void Editor::update(GameRenderer& renderer) {
 		using enum ToolType;
 
 	case SELECT: {
+		hoveredOverEntities.clear();
 		for (auto body : reflectingBodies) {
 			if (isPointInEditorShape(body->shape, input.cursorPos)) {
-				selectedEntities.insert(EditorEntityId(body.id));
+				hoveredOverEntities.insert(EditorEntityId(body.id));
 			}
 		}
+
+		if (input.cursorLeftDown && selectedEntities != hoveredOverEntities) {
+
+
+			actions.addSelectionChange(*this, selectedEntities, hoveredOverEntities);
+			selectedEntities = hoveredOverEntities;
+		}
+		//if (input.cursorRightDown) {
+		//	selectedEntities.clear();
+		//}
+
+		/*if (input.deleteDown) {
+			for (auto& entity : sel)
+		}*/
+
 		break;
 	}
 
@@ -123,7 +141,6 @@ void Editor::update(GameRenderer& renderer) {
 	}
 		
 	}
-
 
 	render(renderer, input);
 	gui();
@@ -169,6 +186,9 @@ void Editor::gui() {
 		};
 
 		ImGui::SeparatorText("tool");
+
+		const auto oldSelection = selectedTool;
+
 		for (const auto item : tools) {
 			const auto type = item.first;
 			const auto name = item.second;
@@ -178,6 +198,9 @@ void Editor::gui() {
 			}
 		}
 
+		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
+			selectedEntities.clear();
+		}
 
 		//ImGui::Button("");
 		ImGui::End();
@@ -189,13 +212,13 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 
 	renderer.drawGrid();
 
-	renderer.gfx.rect(roomBounds.min, roomBounds.size(), 0.1f, Color3::WHITE);
+	renderer.gfx.rect(roomBounds.min, roomBounds.size(), 0.01f / camera.zoom, Color3::WHITE);
 
 	switch (selectedTool) {
 		using enum ToolType;
 
 	case CIRCLE:
-		circleTool.render(renderer.gfx, input.cursorPos);
+		circleTool.render(renderer, input.cursorPos);
 		break;
 	case RECTANGLE:
 		break;
@@ -203,12 +226,17 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 
- 	for (const auto& body : reflectingBodies) {
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	for (const auto& body : reflectingBodies) {
+		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(body.id));
+
 		switch (body->shape.type)
 		{
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
-			renderer.gfx.circle(circle.center, circle.radius, 0.1f, Color3::WHITE);
+			renderer.disk(circle.center, circle.radius, circle.angle, Color3::WHITE / 2.0f, isSelected);
 			break;
 		}
 
@@ -219,10 +247,9 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		}
 	}
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	renderer.gfx.drawLines();
+	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
+	renderer.gfx.drawLines();
 	glDisable(GL_BLEND);
 }
 
@@ -234,6 +261,10 @@ void Editor::destoryAction(EditorAction& action) {
 		break;
 	}
 
+	case SELECTION_CHANGE: {
+		actions.freeSelectionChange(action.selectionChange);
+		break;
+	}
 	}
 }
 
@@ -245,6 +276,15 @@ void Editor::redoAction(const EditorAction& action) {
 		break;
 	}
 	
+	case SELECTION_CHANGE: {
+		const auto& a = action.selectionChange;
+		selectedEntities.clear();
+		for (const auto& id : a.newSelection) {
+			selectedEntities.insert(id);
+		}
+		break;
+	}
+
 	}
 }
 
@@ -266,6 +306,14 @@ void Editor::undoAction(const EditorAction& action) {
 		break;
 	}
 
+	case SELECTION_CHANGE: {
+		const auto& a = action.selectionChange;
+		selectedEntities.clear();
+		for (const auto& id : a.oldSelection) {
+			selectedEntities.insert(id);
+		}
+		break;
+	}
 	}
 }
 
@@ -353,13 +401,9 @@ EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
 
 EditorReflectingBody EditorReflectingBody::DefaultInitialize::operator()() {
 	return EditorReflectingBody{
-		.shape = EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f))
+		.shape = EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f))
 	};
 }
-
-EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius)
-	: center(center)
-	, radius(radius) {}
 
 std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
 	if (cursorRightDown) {
@@ -376,14 +420,14 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 		return std::nullopt;
 	}
 
-	auto result = EditorCircleShape(*center, center->distanceTo(cursorPos));
+	auto result = EditorCircleShape(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle());
 	center = std::nullopt;
 	return result;
 }
 
-void Editor::CircleTool::render(Gfx2d& gfx, Vec2 cursorPos) {
+void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos) {
 	if (center.has_value()) {
-		gfx.circle(*center, center->distanceTo(cursorPos), 0.1f, Color3::WHITE);
+		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), Color3::WHITE / 2.0f, false);
 	}
 }
 

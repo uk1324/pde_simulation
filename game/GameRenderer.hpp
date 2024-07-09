@@ -5,8 +5,10 @@
 struct GameRenderer {
 	static GameRenderer make();
 
+	void disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected);
 	//void update();
 	//void drawDebugDisplay();
+
 	void drawGrid();
 
 	Gfx2d gfx;

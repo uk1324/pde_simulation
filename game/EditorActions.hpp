@@ -1,6 +1,8 @@
 #pragma once
 
 #include <game/EditorEntities.hpp>
+#include <game/StackAllocator.hpp>
+#include <unordered_set>
 
 struct EditorActionCreateEntity {
 	EditorActionCreateEntity(EditorEntityId id);
@@ -8,15 +10,25 @@ struct EditorActionCreateEntity {
 	EditorEntityId id;
 };
 
+struct EditorActionSelectionChange {
+	EditorActionSelectionChange(View<EditorEntityId> oldSelection, View<EditorEntityId> newSelection);
+
+	View<EditorEntityId> oldSelection;
+	View<EditorEntityId> newSelection;
+};
+
 enum class EditorActionType {
-	CREATE_ENTITY
+	CREATE_ENTITY,
+	SELECTION_CHANGE,
 };
 
 struct EditorAction {
 	union {
 		EditorActionCreateEntity createEntity;
+		EditorActionSelectionChange selectionChange;
 	};
 	EditorAction(const EditorActionCreateEntity& action);
+	EditorAction(const EditorActionSelectionChange& action);
 
 	EditorActionType type;
 };
@@ -42,7 +54,11 @@ struct EditorActions {
 	void endMulticommand();
 
 	void add(Editor& editor, EditorAction&& action) noexcept;
+	void addSelectionChange(Editor& editor, const std::unordered_set<EditorEntityId>& oldSelection, const std::unordered_set<EditorEntityId>& newSelection);
+	void freeSelectionChange(EditorActionSelectionChange& action);
 
 	bool recordingMultiAction = false;
 	i64 currentMultiActionSize = 0;
+
+	StackAllocator stackAllocator;
 };

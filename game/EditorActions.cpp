@@ -57,6 +57,36 @@ void EditorActions::add(Editor& editor, EditorAction&& action) noexcept {
     actionStack.add(std::move(action));
 }
 
+void EditorActions::addSelectionChange(Editor& editor, const std::unordered_set<EditorEntityId>& oldSelection, const std::unordered_set<EditorEntityId>& newSelection) {
+    const auto memory = reinterpret_cast<EditorEntityId*>(stackAllocator.allocate(
+        (oldSelection.size() + newSelection.size()) * sizeof(EditorEntityId), 
+        alignof(EditorEntityId)));
+    auto old = View<EditorEntityId>(memory, oldSelection.size());
+
+    {
+        i64 i = 0;
+        for (const auto& id : oldSelection) {
+            old[i] = id;
+            i++;
+        }
+    }
+
+    auto new_ = View<EditorEntityId>(memory + oldSelection.size(), newSelection.size());
+    {
+        i64 i = 0;
+        for (const auto& id : newSelection) {
+            old[i] = id;
+            i++;
+        }
+    }
+
+    add(editor, EditorAction(EditorActionSelectionChange(old, new_)));
+}
+
+void EditorActions::freeSelectionChange(EditorActionSelectionChange& action) {
+    stackAllocator.free(action.oldSelection.data());
+}
+
 EditorActions::Action::Action(i64 subActionCount)
     : subActionCount(subActionCount) {}
 
@@ -64,5 +94,13 @@ EditorAction::EditorAction(const EditorActionCreateEntity& action)
     : createEntity(action)
     , type(EditorActionType::CREATE_ENTITY) {}
 
+EditorAction::EditorAction(const EditorActionSelectionChange& action) 
+    : selectionChange(action)
+    , type(EditorActionType::SELECTION_CHANGE) {}
+
 EditorActionCreateEntity::EditorActionCreateEntity(EditorEntityId id)
     : id(id) {}
+
+EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> oldSelection, View<EditorEntityId> newSelection) 
+    : oldSelection(oldSelection)
+    , newSelection(newSelection) {}

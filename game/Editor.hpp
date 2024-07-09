@@ -4,7 +4,6 @@
 #include <variant>
 #include <game/EditorActions.hpp>
 #include <game/GameRenderer.hpp>
-#include <unordered_set>
 
 struct GameInput {
 	bool upButtonHeld;
@@ -16,6 +15,8 @@ struct GameInput {
 	bool cursorRightDown;
 	bool undoDown;
 	bool redoDown;
+	bool ctrlHeld;
+	bool deleteDown;
 };
 
 bool isPointInCircle(Vec2 center, f32 radius, Vec2 point);
@@ -47,13 +48,14 @@ struct Editor {
 	struct CircleTool {
 		std::optional<Vec2> center;
 		std::optional<EditorCircleShape> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
-		void render(Gfx2d& gfx, Vec2 cursorPos);
+		void render(GameRenderer& gfx, Vec2 cursorPos);
 	} circleTool;
 
 	Camera camera;
 
 	Aabb roomBounds;
 
+	std::unordered_set<EditorEntityId> hoveredOverEntities;
 	std::unordered_set<EditorEntityId> selectedEntities;
 
 	void destoryAction(EditorAction& action);
