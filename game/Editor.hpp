@@ -27,7 +27,12 @@ struct Editor {
 	static Editor make();
 
 	void update(GameRenderer& renderer);
+
 	void gui();
+	void selectToolGui();
+	void entityGui(EditorEntityId id);
+	void shapeGui(EditorShape& shape);
+
 	void render(GameRenderer& renderer, const GameInput& input);
 
 	static bool firstFrame;

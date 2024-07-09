@@ -6,6 +6,7 @@
 #include <engine/Math/Rotation.hpp>
 #include <gfx2d/CameraUtils.hpp>
 #include <imgui/imgui.h>
+#include <Gui.hpp>
 #include <imgui/imgui_internal.h>
 #include <glad/glad.h>
 
@@ -16,6 +17,20 @@ EditorShape::EditorShape(const EditorCircleShape& circle)
 EditorShape::EditorShape(const EditorPolygonShapeId& polygon)
 	: polygon(polygon)
 	, type(EditorShapeType::POLYGON) {}
+
+bool EditorShape::operator==(const EditorShape& other) const {
+	if (other.type != type) {
+		return false;
+	}
+
+	switch (type) {
+	case CIRCLE: return circle == other.circle;
+	case POLYGON: return polygon == other.polygon;
+	}
+
+	CHECK_NOT_REACHED();
+	return false;
+}
 
 Editor Editor::make() {
 	Editor editor{
@@ -204,8 +219,77 @@ void Editor::gui() {
 			selectedEntities.clear();
 		}
 
+		switch (selectedTool) {
+			using enum ToolType;
+
+		case SELECT:
+			selectToolGui();
+			break;
+
+		case CIRCLE:
+		case RECTANGLE:
+			break;
+		}
+
 		//ImGui::Button("");
 		ImGui::End();
+	}
+}
+
+void Editor::selectToolGui() {
+
+	ImGui::SeparatorText("selection");
+	if (selectedEntities.size() == 0) {
+		ImGui::TextWrapped("no entities selected");
+	} else if (selectedEntities.size() == 1) {
+		auto& id = *selectedEntities.begin();
+		entityGui(id);
+	} else {
+
+	}
+}
+
+void Editor::entityGui(EditorEntityId id) {
+	if (Gui::beginPropertyEditor()) {
+		switch (id.type) {
+			using enum EditorEntityType;
+
+		case REFLECTING_BODY: {
+			auto body = reflectingBodies.get(id.reflectingBody());
+			if (!body.has_value()) {
+				CHECK_NOT_REACHED();
+				break;
+			}
+			// @Performance:
+			auto old = *body;
+			ImGui::TextWrapped("shape");
+			shapeGui(body->shape);
+			// @Performance: could make the gui return if modified and only then add.
+			if (old != *body) {
+				actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.reflectingBody(), old, *body)));
+			}
+		}
+
+		}
+
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+}
+
+void Editor::shapeGui(EditorShape& shape) {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE: {
+		auto& circle = shape.circle;
+		Gui::inputVec2("position", circle.center);
+		Gui::inputFloat("radius", circle.radius);
+		break;
+	}
+
+	case POLYGON:
+		ASSERT_NOT_REACHED();
+
 	}
 }
 
@@ -274,6 +358,9 @@ void Editor::destoryAction(EditorAction& action) {
 		break;
 	}
 
+	case MODIFY_REFLECTING_BODY:
+		break;
+
 	}
 }
 
@@ -296,6 +383,17 @@ void Editor::redoAction(const EditorAction& action) {
 		for (const auto& id : a.newSelection) {
 			selectedEntities.insert(id);
 		}
+		break;
+	}
+
+	case MODIFY_REFLECTING_BODY: {
+		const auto& a = action.modifyReflectingBody;
+		auto body = reflectingBodies.get(a.id);
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		*body = a.newEntity;
 		break;
 	}
 
@@ -323,6 +421,18 @@ void Editor::undoAction(const EditorAction& action) {
 		}
 		break;
 	}
+
+	case MODIFY_REFLECTING_BODY: {
+		const auto& a = action.modifyReflectingBody;
+		auto body = reflectingBodies.get(a.id);
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		*body = a.oldEntity;
+		break;
+	}
+		
 	}
 }
 

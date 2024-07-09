@@ -102,6 +102,10 @@ EditorAction::EditorAction(const EditorActionSelectionChange& action)
     : selectionChange(action)
     , type(EditorActionType::SELECTION_CHANGE) {}
 
+EditorAction::EditorAction(const EditorActionModifyReflectingBody& action) 
+    : modifyReflectingBody(action)
+    , type(EditorActionType::MODIFY_REFLECTING_BODY) {}
+
 EditorActionCreateEntity::EditorActionCreateEntity(EditorEntityId id)
     : id(id) {}
 
@@ -111,3 +115,8 @@ EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> ol
 
 EditorActionDestroyEntity::EditorActionDestroyEntity(EditorEntityId id) 
     : id(id) {}
+
+EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorReflectingBody& oldEntity, const EditorReflectingBody& newEntity)
+    : id(id)
+    , oldEntity(oldEntity)
+    , newEntity(newEntity) {}

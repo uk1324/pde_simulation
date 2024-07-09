@@ -10,6 +10,8 @@ struct EditorCircleShape {
 	Vec2 center;
 	f32 radius;
 	f32 angle;
+
+	bool operator==(const EditorCircleShape&) const = default;
 };
 
 struct EditorPolygonShape {
@@ -36,6 +38,8 @@ struct EditorShape {
 	explicit EditorShape(const EditorPolygonShapeId& polygon);
 
 	EditorShapeType type;
+
+	bool operator==(const EditorShape& other) const;
 };
 
 struct EditorReflectingBody {
@@ -44,6 +48,8 @@ struct EditorReflectingBody {
 	};
 
 	EditorShape shape;
+
+	bool operator==(const EditorReflectingBody&) const = default;
 };
 
 using EditorReflectingBodyId = EntityArrayId<EditorReflectingBody>;
