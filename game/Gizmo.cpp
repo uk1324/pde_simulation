@@ -17,21 +17,29 @@ Gizmo::Result Gizmo::update(const Camera& camera, Vec2 gizmoPosition, Vec2 curso
 	Vec2 translation(0.0f);
 
 	if (grabDown) {
-		currentState = State::GRAB_START;
+		bool grabbed = false;
+
 		if (centerDistance < acivationDistance) {
+			grabbed = true;
 			grabbedPart = Part::CENTER;
 		} else if (xAxisGizmoDistance < acivationDistance) {
+			grabbed = true;
 			grabbedPart = Part::X_AXIS;
 		} else if (yAxisGizmoDistance < acivationDistance) {
+			grabbed = true;
 			grabbedPart = Part::Y_AXIS;
 		}
-		cursorPositionAtGrabStart = cursorPos;
+
+		if (grabbed) {
+			currentState = State::GRAB_START;
+			cursorPositionAtGrabStart = cursorPos;
+		}
+
 	} else if (currentState == State::GRAB_START && grabHeld) {
 		currentState = State::GRABBED;
 	}
 		
 	if (currentState == State::GRABBED) {
-			
 		const auto cursorChangeSinceGrab = cursorPos - cursorPositionAtGrabStart;
 		switch (grabbedPart) {
 			using enum Part;

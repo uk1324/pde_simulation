@@ -15,6 +15,7 @@ struct Editor {
 	static Editor make();
 
 	void update(GameRenderer& renderer, const GameInput& input);
+	void selectToolUpdate(const GameInput& input);
 
 	void gui();
 	void selectToolGui();
@@ -49,10 +50,15 @@ struct Editor {
 
 	Camera camera;
 
+	struct SelectTool {
+		std::optional<Vec2> grabStartPos;
+		std::optional<Aabb> selectionBox(const Camera& camera, Vec2 cursorPos) const;
+	} selectTool;
+
 	Aabb roomBounds;
 
-	std::unordered_set<EditorEntityId> hoveredOverEntities;
 	std::unordered_set<EditorEntityId> selectedEntities;
+	Vec2 selectedEntitiesCenter();
 
 	void destoryEntity(const EditorEntityId& id);
 
@@ -73,6 +79,9 @@ struct Editor {
 	void shapeSetPosition(EditorShape& shape, Vec2 position);
 
 	EditorShape cloneShape(const EditorShape& shape);
+
+	Aabb editorShapeAabb(const EditorShape& shape) const;
+	bool isEditorShapeContainedInAabb(const EditorShape& shape, const Aabb& aabb) const;
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();

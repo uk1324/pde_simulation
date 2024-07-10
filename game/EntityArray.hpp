@@ -38,6 +38,7 @@ struct EntityArray {
 
 	void update();
 	std::optional<Entity&> get(const EntityArrayId<Entity>& id);
+	std::optional<Entity&> getEvenIfInactive(const EntityArrayId<Entity>& id);
 	bool isAlive(const EntityArrayId<Entity>& id);
 	//bool isAlive(const Entity& entity);
 	EntityArrayPair<Entity> create();
@@ -138,15 +139,29 @@ void EntityArray<Entity, DefaultInitialize>::update() {
 
 template<typename Entity, typename DefaultInitialize>
 std::optional<Entity&> EntityArray<Entity, DefaultInitialize>::get(const EntityArrayId<Entity>& id) {
+	const auto result = getEvenIfInactive(id);
+
+	if (!result.has_value()) {
+		return std::nullopt;
+	}
+
+	if (!entityIsActive[id.index_]) {
+		return std::nullopt;
+	}
+
+	return result;
+}
+
+template<typename Entity, typename DefaultInitialize>
+std::optional<Entity&> EntityArray<Entity, DefaultInitialize>::getEvenIfInactive(const EntityArrayId<Entity>& id) {
 	if (id.index_ >= entities.size()) {
 		ASSERT_NOT_REACHED();
 		return std::nullopt;
 	}
-	
+
 	if (id.version_ != entityVersions[id.index_]) {
 		return std::nullopt;
 	}
-	
 	return entities[id.index_];
 }
 
@@ -192,7 +207,7 @@ void EntityArray<Entity, DefaultInitialize>::deactivate(const EntityArrayId<Enti
 
 template<typename Entity, typename DefaultInitialize>
 void EntityArray<Entity, DefaultInitialize>::activate(const EntityArrayId<Entity>& id) {
-	if (!get(id).has_value()) {
+	if (!getEvenIfInactive(id).has_value()) {
 		return;
 	}
 	entityIsActive[id.index_] = true;
