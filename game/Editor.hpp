@@ -4,20 +4,8 @@
 #include <variant>
 #include <game/EditorActions.hpp>
 #include <game/GameRenderer.hpp>
-
-struct GameInput {
-	bool upButtonHeld;
-	bool downButtonHeld;
-	bool leftButtonHeld;
-	bool rightButtonHeld;
-	Vec2 cursorPos;
-	bool cursorLeftDown;
-	bool cursorRightDown;
-	bool undoDown;
-	bool redoDown;
-	bool ctrlHeld;
-	bool deleteDown;
-};
+#include <game/GameInput.hpp>
+#include <game/Gizmo.hpp>
 
 bool isPointInCircle(Vec2 center, f32 radius, Vec2 point);
 
@@ -26,7 +14,7 @@ bool isPointInEditorShape(const EditorShape& shape, Vec2 point);
 struct Editor {
 	static Editor make();
 
-	void update(GameRenderer& renderer);
+	void update(GameRenderer& renderer, const GameInput& input);
 
 	void gui();
 	void selectToolGui();
@@ -56,6 +44,9 @@ struct Editor {
 		void render(GameRenderer& gfx, Vec2 cursorPos);
 	} circleTool;
 
+	Gizmo gizmo;
+	List<EditorShape> gizmoSelectedShapesAtGrabStart;
+
 	Camera camera;
 
 	Aabb roomBounds;
@@ -75,6 +66,13 @@ struct Editor {
 
 	void fullyDeleteEntity(const EditorEntityId& id);
 	void deleteShape(const EditorShape& shape);
+
+	Vec2 entityGetPosition(const EditorEntityId& id); // TODO: Make a const version of get for entity array then make this const.
+	void entitySetPosition(const EditorEntityId& id, Vec2 position);
+	Vec2 shapeGetPosition(const EditorShape& shape) const;
+	void shapeSetPosition(EditorShape& shape, Vec2 position);
+
+	EditorShape cloneShape(const EditorShape& shape);
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();

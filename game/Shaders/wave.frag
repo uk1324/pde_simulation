@@ -8,7 +8,7 @@ out vec4 fragColor;
 uniform sampler2D waveTexture;
 
 void main() {
-	fragColor = vec4(fragTexturePosition, 0.0, 1.0);
-	fragColor = texture(waveTexture, fragTexturePosition);
+	fragColor = vec4(fragTexturePosition, 0.0, 0.5);
+	fragColor = vec4(texture(waveTexture, fragTexturePosition).rgb, 0.5);
 	//fragColor = vec4(1.0, 1.0, 1.0, 1.0);
 }

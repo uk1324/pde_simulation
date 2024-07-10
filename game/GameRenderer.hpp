@@ -5,6 +5,7 @@
 struct GameRenderer {
 	static GameRenderer make();
 
+	void drawBounds(Aabb aabb);
 	void disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected);
 	//void update();
 	//void drawDebugDisplay();

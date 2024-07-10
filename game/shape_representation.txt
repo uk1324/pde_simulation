@@ -1,0 +1,20 @@
+How should shapes like circles react to scaling?
+Scaling circles could be used to create an ellipse, but its probably better to create a custom editor for it. The user doesn't need to know what an ellpise is a scale circle.
+
+How it's handled Algodoo. At least in the version in the video.
+The angle indicators disappear when the shape is scaled so I am guessing that they turn the shape into a polygon.
+https://youtu.be/KdtYVq5f70Q?si=ddpqAFRlpyp77cPe&t=292
+
+The joints should be in the same place on the shape after scaling.
+
+Could have a base shape for example a circle or some polygon and with that a transform would be stored. This would make it easy to implement transformations. Only the start transform and end transform would need to be stored. This would only work for the transform representable using the data stored. I can't really thing of a need for transforms other that linear ones.
+If I represented a polygon by just a set of vertices then before transforming the whole shape would need to be saved before modyfying. One issue with that is how to deal with something like this
+1. The user begins to use the gizmo.
+2. The user modifies the shape in some other way. For example using the gui.
+3. Then after the user finishes the gizmo use the action that is saved uses the old information about the shapes. 
+Depending on the modification different things could happen.
+If the modification that is applied to the shapes is based on the initial position then the modification to a shape performed by something othe than gizmo will instantly be replaced by the one using the gizmo.
+If only a part of the shape is modified for example a vertex of a polygon then the modification will be saved incorretly. If I understand correctly the modification that will be saved first will be the modification from the partially modified by the gizmo state to the outside modification then there will be a modification from the gizmo grab start state to the state with both the gizmo modification and the outside modifications applied.
+If I only stored the diff then this wouldn't get fixed.
+What is even the correct behaviour? I guess ignoring the modification from outside the gizmo would be fine.
+TODO: Fix this.

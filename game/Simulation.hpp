@@ -2,6 +2,7 @@
 
 #include <Array2d.hpp>
 #include <List.hpp>
+#include <game/GameInput.hpp>
 #include <game/Box2d.hpp>
 #include <game/GameRenderer.hpp>
 
@@ -15,9 +16,11 @@ struct Simulation {
 
 	f32 dt;
 
-	void update(GameRenderer& renderer);
+	void update(GameRenderer& renderer, const GameInput& input);
 	void waveSimulationUpdate();
 	void render(GameRenderer& renderer);
+
+	void reset();
 
 	Aabb displayGridBounds() const;
 	Aabb simulationGridBounds() const;

@@ -13,3 +13,6 @@ EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
 	: center(center)
 	, radius(radius)
 	, angle(angle) {}
+
+EditorReflectingBody::EditorReflectingBody(const EditorShape& shape)
+ : shape(shape) {}

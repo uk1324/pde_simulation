@@ -17,11 +17,15 @@ struct MainLoop {
 
 	GameRenderer renderer;
 	Editor editor;
-	Simulation game;
+	Simulation simulation;
+
+	enum class State {
+		EDITOR,
+		SIMULATION,
+	};
+	State currentState = State::EDITOR;
 
 	/*PoissonEquationDemo demo;
 	HeatEquationDemo heatEquation;*/
 	//Array2d<f32> data;
-
-	Camera camera;
 };

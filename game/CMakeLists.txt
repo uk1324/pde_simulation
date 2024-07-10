@@ -1,4 +1,4 @@
-add_executable(simulation "main.cpp" "MainLoop.cpp" "Demos/PoissonEquationSolver.cpp" "Demos/PoissonEquationDemo.cpp" "Textures.cpp" "Demos/HeatEquationDemo.cpp" "PlotUtils.cpp"  "Simulation.cpp" "GridUtils.cpp" "Box2d.cpp" "Editor.cpp" "GameRenderer.cpp" "Constants.cpp" "EditorActions.cpp" "EditorEntities.cpp" "StackAllocator.cpp")
+add_executable(simulation "main.cpp" "MainLoop.cpp" "Demos/PoissonEquationSolver.cpp" "Demos/PoissonEquationDemo.cpp" "Textures.cpp" "Demos/HeatEquationDemo.cpp" "PlotUtils.cpp"  "Simulation.cpp" "GridUtils.cpp" "Box2d.cpp" "Editor.cpp" "GameRenderer.cpp" "Constants.cpp" "EditorActions.cpp" "EditorEntities.cpp" "StackAllocator.cpp" "Shared.cpp" "Gizmo.cpp")
 
 target_link_libraries(simulation PUBLIC engine)
 

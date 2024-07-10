@@ -2,9 +2,9 @@
 #include <game/Editor.hpp>
 #include <game/Constants.hpp>
 #include <engine/Input/Input.hpp>
+#include <game/Shared.hpp>
 #include <engine/Math/Color.hpp>
 #include <engine/Math/Rotation.hpp>
-#include <gfx2d/CameraUtils.hpp>
 #include <imgui/imgui.h>
 #include <Gui.hpp>
 #include <imgui/imgui_internal.h>
@@ -24,6 +24,7 @@ bool EditorShape::operator==(const EditorShape& other) const {
 	}
 
 	switch (type) {
+		using enum EditorShapeType;
 	case CIRCLE: return circle == other.circle;
 	case POLYGON: return polygon == other.polygon;
 	}
@@ -34,6 +35,7 @@ bool EditorShape::operator==(const EditorShape& other) const {
 
 Editor Editor::make() {
 	Editor editor{
+		.gizmoSelectedShapesAtGrabStart = List<EditorShape>::empty(),
 		.roomBounds = Constants::gridBounds(Constants::DEFAULT_GRID_SIZE),
 		.actions = EditorActions::make(),
 		.polygonShapes = decltype(polygonShapes)::make(),
@@ -47,53 +49,8 @@ Editor Editor::make() {
 	return editor;
 }
 
-void Editor::update(GameRenderer& renderer) {
-	//polygonShapes.update();
+void Editor::update(GameRenderer& renderer, const GameInput& input) {
 	reflectingBodies.update();
-
-	zoomOnCursorPos(camera, dt);
-
-	GameInput input{
-		.upButtonHeld = Input::isKeyHeld(KeyCode::W),
-		.downButtonHeld = Input::isKeyHeld(KeyCode::S),
-		.leftButtonHeld = Input::isKeyHeld(KeyCode::A),
-		.rightButtonHeld = Input::isKeyHeld(KeyCode::D),
-		.cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace(),
-		.cursorLeftDown = Input::isMouseButtonDown(MouseButton::LEFT),
-		.cursorRightDown = Input::isMouseButtonDown(MouseButton::RIGHT),
-		.undoDown = false,
-		.redoDown = false,
-		.ctrlHeld = Input::isKeyHeld(KeyCode::LEFT_CONTROL),
-		.deleteDown = Input::isKeyDown(KeyCode::DELETE)
-	};
-
-	if (Input::isKeyHeld(KeyCode::LEFT_CONTROL) && Input::isKeyDownWithAutoRepeat(KeyCode::Z)) {
-		input.undoDown = true;
-	}
-
-	if (Input::isKeyHeld(KeyCode::LEFT_CONTROL) && Input::isKeyDownWithAutoRepeat(KeyCode::Y)) {
-		input.redoDown = true;
-	}
-
-	{
-		Vec2 movement(0.0f);
-
-		if (input.rightButtonHeld) {
-			movement.x += 1.0f;
-		}
-		if (input.leftButtonHeld) {
-			movement.x -= 1.0f;
-		}
-		if (input.upButtonHeld) {
-			movement.y += 1.0f;
-		}
-		if (input.downButtonHeld) {
-			movement.y -= 1.0f;
-		}
-
-		const auto speed = 10.0f;
-		camera.pos += movement.normalized() * speed * dt;
-	}
 
 	if (input.undoDown) {
 		if (actions.lastDoneAction >= 0 && actions.lastDoneAction < actions.actions.size()) {
@@ -119,27 +76,200 @@ void Editor::update(GameRenderer& renderer) {
 		using enum ToolType;
 
 	case SELECT: {
-		hoveredOverEntities.clear();
-		for (auto body : reflectingBodies) {
-			if (isPointInEditorShape(body->shape, input.cursorPos)) {
-				hoveredOverEntities.insert(EditorEntityId(body.id));
+		bool cursorCaptured = false;
+
+
+		if (selectedEntities.size() > 0) {
+		/*	const auto& entity = *selectedEntities.begin();
+			switch (entity.type) {
+				using enum EditorEntityType;
+			case REFLECTING_BODY: {
+				const auto reflectingBodyId = entity.reflectingBody();
+				auto reflectingBody = reflectingBodies.get(reflectingBodyId);
+				if (!reflectingBody.has_value()) {
+					CHECK_NOT_REACHED();
+					break;
+				}
+				switch (reflectingBody->shape.type) {
+					using enum EditorShapeType;
+				case CIRCLE: {
+					auto& circle = reflectingBody->shape.circle;
+					const auto gizmoPosition = circle.center;
+
+					const auto arrows = gizmo.getArrows(camera);
+					const auto xDirection = arrows.xArrow.normalized();
+					const auto yDirection = arrows.yArrow.normalized();
+
+					const f32 xAxisGizmoDistance = distanceLineSegmentToPoint(gizmoPosition, gizmoPosition + arrows.xArrow, input.cursorPos);
+					const f32 yAxisGizmoDistance = distanceLineSegmentToPoint(gizmoPosition, gizmoPosition + arrows.yArrow, input.cursorPos);
+					const f32 centerDistance = gizmoPosition.distanceTo(input.cursorPos);
+
+					const auto arrowWidth = gizmo.arrowWidth(camera);
+					const auto acivationDistance = (arrowWidth / 2.0f) * 4.0f;
+
+					if (input.cursorLeftDown) {
+						cursorCaptured = true;
+						if (centerDistance < acivationDistance) {
+							gizmo.grabbedGizmo = Gizmo::GizmoType::CENTER;
+						} else if (xAxisGizmoDistance < acivationDistance) {
+							gizmo.grabbedGizmo = Gizmo::GizmoType::X_AXIS;
+						} else if (yAxisGizmoDistance < acivationDistance) {
+							gizmo.grabbedGizmo = Gizmo::GizmoType::Y_AXIS;
+						}
+						gizmo.grabStartPosition = input.cursorPos;
+						gizmo.pos = circle.center;
+					}
+
+					if (input.cursorLeftHeld) {
+						cursorCaptured = true;
+						const auto cursorChangeSinceGrab = input.cursorPos - gizmo.grabStartPosition;
+						switch (gizmo.grabbedGizmo) {
+							using enum Gizmo::GizmoType;
+							
+						case CENTER:
+							circle.center = gizmo.pos + cursorChangeSinceGrab;
+							break;
+
+						case X_AXIS:
+							circle.center = gizmo.pos + xDirection * dot(cursorChangeSinceGrab, xDirection);
+							break;
+
+						case Y_AXIS:
+							circle.center = gizmo.pos + yDirection * dot(cursorChangeSinceGrab, yDirection);
+							break;
+
+						case NONE:
+							break;
+						}
+					}
+
+					break;
+				}
+				case POLYGON:
+					ASSERT_NOT_REACHED();
+					break;
+
+				}
+
+				break;
+			}
+
+			}*/
+
+		}
+
+		/*if (!input.cursorLeftHeld) {
+			gizmo.grabbedGizmo = Gizmo::GizmoType::NONE;
+		}*/
+
+		if (selectedEntities.size() > 0 && !cursorCaptured) {
+			Vec2 center(0.0f);
+
+			for (const auto& entity : selectedEntities) {
+				center += entityGetPosition(entity);
+			}
+			center /= selectedEntities.size();
+
+			const auto result = gizmo.update(camera, center, input.cursorPos, input.cursorLeftDown, input.cursorLeftUp, input.cursorLeftHeld);
+			switch (result.state) {
+				using enum Gizmo::State;
+
+				case INACTIVE:
+					break;
+
+				case GRAB_START:
+					cursorCaptured = true;
+					gizmoSelectedShapesAtGrabStart.clear();
+					for (auto& entity : selectedEntities) {
+						switch (entity.type) {
+							using enum EditorEntityType;
+						case REFLECTING_BODY: {
+							auto body = reflectingBodies.get(entity.reflectingBody());
+							if (!body.has_value()) {
+								CHECK_NOT_REACHED();
+								continue;
+							}
+							gizmoSelectedShapesAtGrabStart.add(cloneShape(body->shape));
+							break;
+
+						}
+						}
+					}
+					break;
+
+				case GRAB_END: {
+					cursorCaptured = true;
+
+					if (selectedEntities.size() != gizmoSelectedShapesAtGrabStart.size()) {
+						CHECK_NOT_REACHED();
+						break;
+					}
+
+					i64 i = 0;
+					for (auto& entity : selectedEntities) {
+						switch (entity.type) {
+							using enum EditorEntityType;
+						case REFLECTING_BODY: {
+							auto body = reflectingBodies.get(entity.reflectingBody());
+							if (!body.has_value()) {
+								CHECK_NOT_REACHED();
+								continue;
+							}
+							const auto old = EditorReflectingBody(gizmoSelectedShapesAtGrabStart[i]);
+							auto newShape = cloneShape(old.shape);
+							shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
+							actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorReflectingBody(newShape))));
+							break;
+
+						}
+						}
+
+						//entity.
+						//entitySetPosition(entity, shapeGetPosition() + result.translation);
+						//i++;
+					}
+
+					break;
+				}
+
+				case GRABBED: {
+					cursorCaptured = true;
+
+					if (selectedEntities.size() != gizmoSelectedShapesAtGrabStart.size()) {
+						CHECK_NOT_REACHED();
+						break;
+					}
+					i64 i = 0;
+					for (auto& entity : selectedEntities) {
+						entitySetPosition(entity, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
+						i++;
+					}
+				}
+
+					
 			}
 		}
 
-		if (input.cursorLeftDown && selectedEntities != hoveredOverEntities) {
-			actions.addSelectionChange(*this, selectedEntities, hoveredOverEntities);
-			selectedEntities = hoveredOverEntities;
-		}
-		//if (input.cursorRightDown) {
-		//	selectedEntities.clear();
-		//}
-
-		if (input.deleteDown) {
-			actions.beginMulticommand();
-			for (auto& entity : selectedEntities) {
-				destoryEntity(entity);
+		if (!cursorCaptured) {
+			hoveredOverEntities.clear();
+			for (auto body : reflectingBodies) {
+				if (isPointInEditorShape(body->shape, input.cursorPos)) {
+					hoveredOverEntities.insert(EditorEntityId(body.id));
+				}
 			}
-			actions.endMulticommand();
+
+			if (input.cursorLeftDown && selectedEntities != hoveredOverEntities) {
+				actions.addSelectionChange(*this, selectedEntities, hoveredOverEntities);
+				selectedEntities = hoveredOverEntities;
+			}
+
+			if (input.deleteDown) {
+				actions.beginMulticommand();
+				for (auto& entity : selectedEntities) {
+					destoryEntity(entity);
+				}
+				actions.endMulticommand();
+			}
 		}
 
 		break;
@@ -161,6 +291,10 @@ void Editor::update(GameRenderer& renderer) {
 
 	render(renderer, input);
 	gui();
+
+	// Apply the camera movement after the frame so the cursor pos isn't delayed. Another option would be to update the cursor pos after the movement. Or just query the cursor pos each time.
+	cameraMovement(camera, input, dt);
+
 }
 
 void Editor::gui() {
@@ -237,7 +371,6 @@ void Editor::gui() {
 }
 
 void Editor::selectToolGui() {
-
 	ImGui::SeparatorText("selection");
 	if (selectedEntities.size() == 0) {
 		ImGui::TextWrapped("no entities selected");
@@ -245,7 +378,7 @@ void Editor::selectToolGui() {
 		auto& id = *selectedEntities.begin();
 		entityGui(id);
 	} else {
-
+		//actions.beginMulticommand();
 	}
 }
 
@@ -298,29 +431,16 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 
 	renderer.drawGrid();
 
-	renderer.gfx.rect(roomBounds.min, roomBounds.size(), 0.01f / camera.zoom, Color3::WHITE);
-
-	switch (selectedTool) {
-		using enum ToolType;
-
-	case CIRCLE:
-		circleTool.render(renderer, input.cursorPos);
-		break;
-	case RECTANGLE:
-		break;
-	
-	case SELECT:
-		break;
-	}
-
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	renderer.drawBounds(roomBounds);
 
 	for (const auto& body : reflectingBodies) {
 		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(body.id));
 
-		switch (body->shape.type)
-		{
+		switch (body->shape.type) {
+			using enum EditorShapeType;
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
 			renderer.disk(circle.center, circle.radius, circle.angle, Color3::WHITE / 2.0f, isSelected);
@@ -337,6 +457,65 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
+
+	switch (selectedTool) {
+		using enum ToolType;
+
+	case CIRCLE:
+		circleTool.render(renderer, input.cursorPos);
+		renderer.gfx.drawDisks();
+		renderer.gfx.drawCircles();
+		renderer.gfx.drawLines();
+		break;
+	case RECTANGLE:
+		break;
+	
+	case SELECT: {
+		if (selectedEntities.size() == 1) {
+			const auto& entity = *selectedEntities.begin();
+			switch (entity.type) {
+				using enum EditorEntityType;
+			case REFLECTING_BODY: {
+				const auto reflectingBodyId = entity.reflectingBody();
+				const auto reflectingBody = reflectingBodies.get(reflectingBodyId);
+				if (!reflectingBody.has_value()) {
+					CHECK_NOT_REACHED();
+					break;
+				}
+				switch (reflectingBody->shape.type) {
+					using enum EditorShapeType;
+				case CIRCLE: {
+					auto& circle = reflectingBody->shape.circle;
+					const auto arrows = gizmo.getArrows(camera);
+					f32 width = gizmo.arrowWidth(camera);
+					f32 tipLength = 0.06f / camera.zoom;
+					renderer.gfx.arrow(circle.center, circle.center + arrows.xArrow, tipLength, 0.4f, width, Color3::RED);
+					renderer.gfx.arrow(circle.center, circle.center + arrows.yArrow, tipLength, 0.4f, width, Color3::GREEN);
+					renderer.gfx.disk(circle.center, width * 1.5f, Color3::BLUE * 0.7f);
+					renderer.gfx.drawLines();
+					renderer.gfx.drawDisks();
+					break;
+				}
+				case POLYGON:
+					ASSERT_NOT_REACHED();
+					break;
+					
+				}
+
+				break;
+			}
+
+			}
+
+		} else if (selectedEntities.size() > 1) {
+			
+		}
+	}
+
+
+		break;
+	}
+
 	glDisable(GL_BLEND);
 }
 
@@ -510,6 +689,79 @@ EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
 	return EditorShape(shape.id);
 }
 
+Vec2 Editor::entityGetPosition(const EditorEntityId& id) {
+	switch (id.type) {
+		using enum EditorEntityType;
+	case REFLECTING_BODY: {
+		const auto body = reflectingBodies.get(id.reflectingBody());
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		return shapeGetPosition(body->shape);
+	}
+	}
+
+	CHECK_NOT_REACHED();
+	return Vec2(0.0f);
+}
+
+void Editor::entitySetPosition(const EditorEntityId& id, Vec2 position) {
+	switch (id.type) {
+		using enum EditorEntityType;
+	case REFLECTING_BODY: {
+		auto body = reflectingBodies.get(id.reflectingBody());
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		shapeSetPosition(body->shape, position);
+		break;
+	}
+		 
+
+	default:
+		break;
+	}
+}
+
+Vec2 Editor::shapeGetPosition(const EditorShape& shape) const {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE: return shape.circle.center;
+	case POLYGON:
+		ASSERT_NOT_REACHED();
+		break;
+	}
+}
+
+void Editor::shapeSetPosition(EditorShape& shape, Vec2 position) {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE: shape.circle.center = position; break;
+	case POLYGON:
+		ASSERT_NOT_REACHED();
+		break;
+	}
+}
+
+EditorShape Editor::cloneShape(const EditorShape& shape) {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE:
+		return shape;
+		break;
+
+	case POLYGON:
+		ASSERT_NOT_REACHED();
+		break;
+	}
+
+	CHECK_NOT_REACHED();
+	return EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f));
+}
+
+
 EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	auto shape = polygonShapes.create();
 	shape->vertices.clear();
@@ -540,9 +792,7 @@ EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
 }
 
 EditorReflectingBody EditorReflectingBody::DefaultInitialize::operator()() {
-	return EditorReflectingBody{
-		.shape = EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f))
-	};
+	return EditorReflectingBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)));
 }
 
 std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
@@ -580,6 +830,8 @@ bool isPointInEditorShape(const EditorShape& shape, Vec2 point) {
 		ASSERT_NOT_REACHED();
 		return false;
 	}
+	CHECK_NOT_REACHED();
+	return false;
 }
 
 bool isPointInCircle(Vec2 center, f32 radius, Vec2 point) {

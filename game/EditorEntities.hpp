@@ -24,7 +24,7 @@ struct EditorPolygonShape {
 
 using EditorPolygonShapeId = EntityArrayId<EditorPolygonShape>;
 
-enum EditorShapeType {
+enum class EditorShapeType {
 	CIRCLE,
 	POLYGON,
 };
@@ -46,6 +46,7 @@ struct EditorReflectingBody {
 	struct DefaultInitialize {
 		EditorReflectingBody operator()();
 	};
+	EditorReflectingBody(const EditorShape& shape);
 
 	EditorShape shape;
 

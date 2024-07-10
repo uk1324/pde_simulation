@@ -25,6 +25,11 @@ GameRenderer GameRenderer::make() {
 const f32 WIDTH = 0.15f;
 Vec3 selectedColor = Color3::WHITE;
 
+void GameRenderer::drawBounds(Aabb aabb) {
+	gfx.rect(aabb.min, aabb.size(), 0.01f / gfx.camera.zoom, Color3::WHITE);
+	gfx.drawLines();
+}
+
 void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected) {
 	gfx.disk(center, radius, color);
 	const auto outlineColor = isSelected ? selectedColor : color / 2.0f;

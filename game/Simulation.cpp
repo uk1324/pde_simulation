@@ -9,6 +9,7 @@
 #include <game/Array2dDrawingUtils.hpp>
 #include <game/Shaders/waveData.hpp>
 #include <gfx/Instancing.hpp>
+#include <game/Shared.hpp>
 #include <glad/glad.h>
 #include <game/Constants.hpp>
 
@@ -36,24 +37,25 @@ Simulation::Simulation()
 		cellType(xi, simulationGridSize.y - 1) = CellType::REFLECTING_WALL;
 	}
 
-	const auto size = 100;
-	for (i64 i = 0; i < size; i++) {
-		const auto j = i - size / 2;
-		const auto k = i32((j * j) / 100.0f);
-		Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, k);
-		fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
-	}
+	//const auto size = 100;
+	//for (i64 i = 0; i < size; i++) {
+	//	const auto j = i - size / 2;
+	//	const auto k = i32((j * j) / 100.0f);
+	//	Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, k);
+	//	fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
+	//}
 
-	for (i64 i = 0; i < size; i++) {
-		const auto j = i - size / 2;
-		const auto k = i32((j * j) / 100.0f);
-		Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, simulationGridSize.y - 1 - k);
-		fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
-	}
+	//for (i64 i = 0; i < size; i++) {
+	//	const auto j = i - size / 2;
+	//	const auto k = i32((j * j) / 100.0f);
+	//	Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, simulationGridSize.y - 1 - k);
+	//	fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
+	//}
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
 		worldDef.gravity = b2Vec2{ 0.0f, -10.0f };
+		//worldDef.gravity = b2Vec2{ 0.0f, 0.0f };
 		world = b2CreateWorld(&worldDef);
 	}
 
@@ -67,36 +69,46 @@ Simulation::Simulation()
 		b2BodyId boundaries = b2CreateBody(world, &bodyDef);
 		b2ShapeDef shapeDef = b2DefaultShapeDef();
 
-		b2Polygon bottom = b2MakeOffsetBox(boundsSize.x, halfWidth, b2Vec2{.x = boundsCenter.x, .y = bounds.min.y - halfWidth }, 0.0f);
+		b2Polygon bottom = b2MakeOffsetBox(boundsSize.x / 2.0f, halfWidth, b2Vec2{.x = 0.0f, .y = -(boundsSize.y / 2.0f + halfWidth) }, 0.0f);
 		b2CreatePolygonShape(boundaries, &shapeDef, &bottom);
 
-		b2Polygon top = b2MakeOffsetBox(boundsSize.x, halfWidth, b2Vec2{ .x = boundsCenter.x, .y = bounds.max.y + halfWidth }, 0.0f);
+		b2Polygon top = b2MakeOffsetBox(boundsSize.x / 2.0f, halfWidth, b2Vec2{ .x = 0.0f, .y = (boundsSize.y / 2.0f + halfWidth) }, 0.0f);
 		b2CreatePolygonShape(boundaries, &shapeDef, &top);
 
-		b2Polygon left = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.min.x - halfWidth, .y = boundsCenter.y }, 0.0f);
+
+		b2Polygon left = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = -(boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
 		b2CreatePolygonShape(boundaries, &shapeDef, &left);
 
-		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.max.x + halfWidth, .y = boundsCenter.y }, 0.0f);
+		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = (boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
 		b2CreatePolygonShape(boundaries, &shapeDef, &right);
+
+		//b2Polygon top = b2MakeOffsetBox(boundsSize.x, halfWidth, b2Vec2{ .x = boundsCenter.x, .y = bounds.max.y + halfWidth }, 0.0f);
+		//b2CreatePolygonShape(boundaries, &shapeDef, &top);
+
+		//b2Polygon left = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.min.x - halfWidth, .y = boundsCenter.y }, 0.0f);
+		//b2CreatePolygonShape(boundaries, &shapeDef, &left);
+
+		//b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.max.x + halfWidth, .y = boundsCenter.y }, 0.0f);
+		//b2CreatePolygonShape(boundaries, &shapeDef, &right);
 	}
 
-	for (i64 i = 0; i < 15; i++) {
-		b2BodyDef bodyDef = b2DefaultBodyDef();
-		bodyDef.type = b2_dynamicBody;
-		bodyDef.position = b2Vec2{ 0.0f, 10.0f };
-		b2BodyId bodyId = b2CreateBody(world, &bodyDef);
-		b2Polygon dynamicBox = b2MakeBox(1.0f, 1.0f);
+	//for (i64 i = 0; i < 15; i++) {
+	//	b2BodyDef bodyDef = b2DefaultBodyDef();
+	//	bodyDef.type = b2_dynamicBody;
+	//	bodyDef.position = b2Vec2{ 0.0f, 10.0f };
+	//	b2BodyId bodyId = b2CreateBody(world, &bodyDef);
+	//	b2Polygon dynamicBox = b2MakeBox(1.0f, 1.0f);
 
-		b2ShapeDef shapeDef = b2DefaultShapeDef();
-		shapeDef.density = 1.0f;
-		shapeDef.friction = 0.3f;
+	//	b2ShapeDef shapeDef = b2DefaultShapeDef();
+	//	shapeDef.density = 1.0f;
+	//	shapeDef.friction = 0.3f;
 
-		b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
+	//	b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
 
-		objects.add(Object{
-			.id = bodyId
-		});
-	}
+	//	objects.add(Object{
+	//		.id = bodyId
+	//	});
+	//}
 
 	//for (i64 i = 0; i < 15; i++) {
 	//	b2BodyDef bodyDef = b2DefaultBodyDef();
@@ -116,26 +128,26 @@ Simulation::Simulation()
 	//	});
 	//}
 
-	for (i64 i = 0; i < 1; i++) {
-		b2BodyDef bodyDef = b2DefaultBodyDef();
-		bodyDef.type = b2_dynamicBody;
-		bodyDef.position = b2Vec2{ 0.0f, 10.0f };
-		b2BodyId bodyId = b2CreateBody(world, &bodyDef);
-		b2Polygon dynamicBox = b2MakeBox(0.1f, 10.0f);
+	//for (i64 i = 0; i < 1; i++) {
+	//	b2BodyDef bodyDef = b2DefaultBodyDef();
+	//	bodyDef.type = b2_dynamicBody;
+	//	bodyDef.position = b2Vec2{ 0.0f, 10.0f };
+	//	b2BodyId bodyId = b2CreateBody(world, &bodyDef);
+	//	b2Polygon dynamicBox = b2MakeBox(0.1f, 10.0f);
 
-		b2ShapeDef shapeDef = b2DefaultShapeDef();
-		shapeDef.density = 1.0f;
-		shapeDef.friction = 0.3f;
+	//	b2ShapeDef shapeDef = b2DefaultShapeDef();
+	//	shapeDef.density = 1.0f;
+	//	shapeDef.friction = 0.3f;
 
-		b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
+	//	b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
 
-		transparentObjects.add(TransparentObject{
-			.b2Id = bodyId
-		});
-	}
+	//	transparentObjects.add(TransparentObject{
+	//		.b2Id = bodyId
+	//	});
+	//}
 }
 
-void Simulation::update(GameRenderer& renderer) {
+void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	auto gridBounds = displayGridBounds();
 
 	const auto cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace();
@@ -149,6 +161,7 @@ void Simulation::update(GameRenderer& renderer) {
 		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
 	}
 
+	cameraMovement(camera, input, dt);
 	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::MIDDLE)) {
 	//	fillCircle(cellType, *cursorSimulationGridPos, 3, CellType::REFLECTING_WALL);
 	//}
@@ -166,19 +179,25 @@ void Simulation::update(GameRenderer& renderer) {
 
 	fill(cellType, CellType::EMPTY);
 
+
 	const auto simulationGridBounds = this->simulationGridBounds();
+	auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
+		return Vec2(x - 0.5f, y - 0.5f) * Constants::CELL_SIZE + simulationGridBounds.min;
+	};
 	{
 		for (const auto& object : objects) {
 			getShapes(object.id);
 			for (auto& shapeId : getShapesResult) {
 				const auto shapeAabb = bShape_GetAABB(shapeId);
 				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
+				/*renderer.gfx.rect(Vec2(shapeGridAabb.min) * Constants::CELL_SIZE, Vec2(shapeGridAabb.max - shapeGridAabb.min) * Constants::CELL_SIZE, 0.05f, Color3::WHITE);*/
 
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = gridPositionToCellCenter(xi, yi, simulationGridBounds.min, Constants::CELL_SIZE);
+						const auto cellCenter = calculateCellCenter(xi, yi);
 						if (bShape_TestPoint(shapeId, cellCenter)) {
 							cellType(xi, yi) = CellType::REFLECTING_WALL;
+							//renderer.gfx.disk(cellCenter, Constants::CELL_SIZE / 2.0f, Color3::BLACK);
 						}
 					}
 				}
@@ -197,7 +216,7 @@ void Simulation::update(GameRenderer& renderer) {
 
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = gridPositionToCellCenter(xi, yi, simulationGridBounds.min, Constants::CELL_SIZE);
+						const auto cellCenter = calculateCellCenter(xi, yi);
 						if (bShape_TestPoint(shapeId, cellCenter)) {
 							speedSquared(xi, yi) = pow(defaultSpeed * 0.4, 2.0f);
 						}
@@ -267,6 +286,10 @@ void Simulation::render(GameRenderer& renderer) {
 
 	glViewport(0, 0, Window::size().x, Window::size().y);
 	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	renderer.drawGrid();
 	{
 		for (i32 displayYi = 0; displayYi < displayGrid.sizeY(); displayYi++) {
 			for (i32 displayXi = 0; displayXi < displayGrid.sizeX(); displayXi++) {
@@ -296,15 +319,35 @@ void Simulation::render(GameRenderer& renderer) {
 		const WaveInstance display{
 			.transform = camera.makeTransform(displayGridBounds.center(), 0.0f, displayGridBounds.size() / 2.0f)
 		};
-		camera.changeSizeToFitBox(displayGridBoundsSize);
+		//camera.changeSizeToFitBox(displayGridBoundsSize);
 		renderer.waveShader.setTexture("waveTexture", 0, displayTexture);
 		drawInstances(renderer.waveVao, renderer.gfx.instancesVbo, View<const WaveInstance>(&display, 1), quad2dPtDrawInstances);
 	}
 
+	renderer.drawBounds(displayGridBounds());
+
 	for (const auto& object : objects) {
-		b2Vec2 position = b2Body_GetPosition(object.id);
+		const auto position = toVec2(b2Body_GetPosition(object.id));
 		f32 rotation = b2Body_GetAngle(object.id);
-		renderer.gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::WHITE);
+		getShapes(object.id);
+		for (auto& shape : getShapesResult) {
+			auto type = b2Shape_GetType(shape);
+			switch (type) {
+			case b2_circleShape: {
+				const auto circle = b2Shape_GetCircle(shape);
+				renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Color3::WHITE / 2.0f, false);
+				break;
+			}
+	
+			case b2_capsuleShape:
+			case b2_segmentShape:
+			case b2_polygonShape:
+			case b2_smoothSegmentShape:
+			case b2_shapeTypeCount:
+				ASSERT_NOT_REACHED();
+				break;
+			}
+		}
 	}
 
 	for (const auto& object : transparentObjects) {
@@ -313,11 +356,19 @@ void Simulation::render(GameRenderer& renderer) {
 		renderer.gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::BLACK);
 	}
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	renderer.gfx.drawLines();
+	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
+	renderer.gfx.drawLines();
 	glDisable(GL_BLEND);
+}
+
+void Simulation::reset() {
+	for (auto& object : objects) {
+		b2DestroyBody(object.id);
+	}
+	objects.clear();
+	fill(u, 0.0f);
+	fill(u_t, 0.0f);
 }
 
 Aabb Simulation::displayGridBounds() const {
