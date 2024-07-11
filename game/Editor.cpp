@@ -90,7 +90,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 	}
 			   
 	case POLYGON:
-		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftUp, input.cursorLeftHeld);
+		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftHeld, Input::isKeyDown(KeyCode::LEFT_SHIFT));
 		if (finished) {
 			auto shape = createPolygonShape();
 			shape->initializeFromVertices(constView(polygonTool.vertices));
@@ -295,23 +295,27 @@ void Editor::gui() {
 
 	if (ImGui::Begin(settingsWindowName)) {
 	
-		const std::pair<ToolType, const char*> tools[]{
-			{ ToolType::SELECT, "select" },
-			{ ToolType::CIRCLE, "circle" },
-			{ ToolType::POLYGON, "polygon" },
+		struct ToolDisplay {
+			ToolType type;
+			const char* name;
+			const char* tooltip;
 		};
 
+		const ToolDisplay tools[]{
+			{ ToolType::SELECT, "select", "" },
+			{ ToolType::CIRCLE, "circle", "" },
+			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+		};
+		
 		ImGui::SeparatorText("tool");
 
 		const auto oldSelection = selectedTool;
 
-		for (const auto item : tools) {
-			const auto type = item.first;
-			const auto name = item.second;
-
-			if (ImGui::Selectable(name, type == selectedTool)) {
-				selectedTool = type;
+		for (const auto& tool : tools) {
+			if (ImGui::Selectable(tool.name, tool.type == selectedTool)) {
+				selectedTool = tool.type;
 			}
+			ImGui::SetItemTooltip(tool.tooltip);
 		}
 
 		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
@@ -332,7 +336,6 @@ void Editor::gui() {
 			break;
 		}
 
-		//ImGui::Button("");
 		ImGui::End();
 	}
 }
@@ -425,14 +428,6 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				const auto startIndex = polygon->boundaryEdges[i];
 				const auto endIndex = polygon->boundaryEdges[i + 1];
 				renderer.gfx.line(polygon->vertices[startIndex], polygon->vertices[endIndex], GameRenderer::outlineWidth, outlineColor);
-			}
-			for (i64 i = 0; i < polygon->trianglesVertices.size(); i += 3) {
-				Vec2 v[3] = {
-					polygon->vertices[polygon->trianglesVertices[i]],
-					polygon->vertices[polygon->trianglesVertices[i + 1]],
-					polygon->vertices[polygon->trianglesVertices[i + 2]]
-				};
-				renderer.gfx.polygon(constView(v), GameRenderer::outlineWidth, Color3::RED);
 			}
  			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Color3::WHITE / 2.0f);
 			break;
@@ -841,12 +836,30 @@ Editor::PolygonTool Editor::PolygonTool::make() {
 	};
 }
 
-bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawUp, bool drawHeld) {
+bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown) {
+	/*
+	Not sure what is the best way to make the polygon drawing work. 
+	It's nice to be able to swicht between straight lines and normal drawing and it's also nice to be able to just draw a shape and have the line connect to the endpoint without having to move the cursor there.
+
+	1. Could do what algodoo does.
+	2. Could have a button that finishes the curve.
+	Number 1 makes drawing straight lines less comfortable and number 2 makes finishing the curve less comfortable.
+	Number 2 probably should have an undo redo.
+	*/
+
 	if (drawDown) {
 		drawing = true;
 	}
 
-	if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
+
+	if (drawing && drawHeld) {
+		if (vertices.size() == 0) {
+			vertices.add(cursorPos);
+		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
+			vertices.add(cursorPos);
+		}
+	}
+	/*if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
 		drawing = false;
 		return true;
 	} else if (drawing && drawHeld) {
@@ -855,6 +868,11 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawUp, boo
 		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
 			vertices.add(cursorPos);
 		}
+	}*/
+
+	if (closeCurveDown) {
+		drawing = false;
+		return true;
 	}
 
 	return false;

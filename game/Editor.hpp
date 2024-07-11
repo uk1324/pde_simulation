@@ -48,7 +48,7 @@ struct Editor {
 	struct PolygonTool {
 		static PolygonTool make();
 
-		bool update(Vec2 cursorPos, bool drawDown, bool drawUp, bool drawHeld);
+		bool update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown);
 
 		bool drawing;
 		List<Vec2> vertices;
