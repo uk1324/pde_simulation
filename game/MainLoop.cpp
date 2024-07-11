@@ -68,6 +68,10 @@ void MainLoop::update() {
 				}
 				case POLYGON:
 					ASSERT_NOT_REACHED();
+					//b2MakePolygon()
+					//b2Polygon
+// 
+					//b2CreatePolygonShape()
 					break;
 
 				}

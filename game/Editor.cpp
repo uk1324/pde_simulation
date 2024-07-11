@@ -35,6 +35,7 @@ bool EditorShape::operator==(const EditorShape& other) const {
 
 Editor Editor::make() {
 	Editor editor{
+		.polygonTool = PolygonTool::make(),
 		.gizmoSelectedShapesAtGrabStart = List<EditorShape>::empty(),
 		.roomBounds = Constants::gridBounds(Constants::DEFAULT_GRID_SIZE),
 		.actions = EditorActions::make(),
@@ -87,10 +88,16 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 		}
 		break;
 	}
-
-	case RECTANGLE: {
+			   
+	case POLYGON:
+		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftUp, input.cursorLeftHeld);
+		if (finished) {
+			auto shape = createPolygonShape();
+			shape->initializeFromVertices(constView(polygonTool.vertices));
+			polygonTool.vertices.clear();
+			createObject(EditorShape(shape.id));
+		}
 		break;
-	}
 		
 	}
 
@@ -291,7 +298,7 @@ void Editor::gui() {
 		const std::pair<ToolType, const char*> tools[]{
 			{ ToolType::SELECT, "select" },
 			{ ToolType::CIRCLE, "circle" },
-			{ ToolType::RECTANGLE, "rectangle" },
+			{ ToolType::POLYGON, "polygon" },
 		};
 
 		ImGui::SeparatorText("tool");
@@ -318,8 +325,10 @@ void Editor::gui() {
 			selectToolGui();
 			break;
 
+		case POLYGON:
+			break;
+
 		case CIRCLE:
-		case RECTANGLE:
 			break;
 		}
 
@@ -406,7 +415,17 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		}
 
 		case POLYGON: {
-			//polygonShapes.destroy(shape.polygon);
+			const auto& polygon = polygonShapes.get(body->shape.polygon);
+			if (!polygon.has_value()) {
+				CHECK_NOT_REACHED();
+				break;
+			}
+			const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, isSelected);
+			for (i64 i = 0; i < polygon->boundaryEdges.size(); i += 2) {
+				const auto startIndex = polygon->boundaryEdges[i];
+				const auto endIndex = polygon->boundaryEdges[i + 1];
+				renderer.gfx.line(polygon->vertices[startIndex], polygon->vertices[endIndex], GameRenderer::outlineWidth, outlineColor);
+			}
 			break;
 		}
 		}
@@ -425,8 +444,19 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		renderer.gfx.drawCircles();
 		renderer.gfx.drawLines();
 		break;
-	case RECTANGLE:
+
+	case POLYGON: {
+		//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth, Color3::WHITE);
+		const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, true);
+		if (polygonTool.vertices.size() > 1) {
+			renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth, outlineColor);
+			//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth / 1.3f, outlineColor);
+		} else if (polygonTool.vertices.size() == 1) {
+			renderer.gfx.disk(polygonTool.vertices[0], GameRenderer::outlineWidth / 2.0f, outlineColor);
+		}
 		break;
+	}
+		
 	
 	case SELECT: {
 		if (selectedEntities.size() > 0) {
@@ -664,9 +694,6 @@ EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
 	return EditorShape(shape.id);
 }
 
-//void Editor::selectToolUpdate() {
-//}
-
 Vec2 Editor::entityGetPosition(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
@@ -749,17 +776,14 @@ EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	return shape;
 }
 
-EntityArrayPair<EditorReflectingBody> Editor::createReflectingBody() {
+EntityArrayPair<EditorReflectingBody> Editor::createReflectingBody(const EditorShape& shape) {
 	auto body = reflectingBodies.create();
-	#ifdef DEBUG
-	body->shape = EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f));
-	#endif
+	body->shape = shape;
 	return body;
 }
 
 void Editor::createObject(EditorShape&& shape) {	
- 	auto body = createReflectingBody();
-	body->shape = std::move(shape);
+ 	auto body = createReflectingBody(shape);
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
 	actions.add(*this, EditorAction(std::move(action)));
 }
@@ -767,9 +791,7 @@ void Editor::createObject(EditorShape&& shape) {
 bool Editor::firstFrame = true;
 
 EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
-	return EditorPolygonShape{
-		.vertices = List<Vec2>::empty()
-	};
+	return EditorPolygonShape::make();
 }
 
 EditorReflectingBody EditorReflectingBody::DefaultInitialize::operator()() {
@@ -800,6 +822,33 @@ void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos) {
 	if (center.has_value()) {
 		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), Color3::WHITE / 2.0f, false);
 	}
+}
+
+Editor::PolygonTool Editor::PolygonTool::make() {
+	return PolygonTool{
+		.drawing = false,
+		.vertices = List<Vec2>::empty(),
+	};
+}
+
+bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawUp, bool drawHeld) {
+	if (drawDown) {
+		drawing = true;
+	}
+
+	if (drawHeld) {
+		if (vertices.size() == 0) {
+			vertices.add(cursorPos);
+		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
+			vertices.add(cursorPos);
+		}
+	}
+
+	if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
+		drawing = false;
+		return true;
+	}
+	return false;
 }
 
 std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 cursorPos) const {

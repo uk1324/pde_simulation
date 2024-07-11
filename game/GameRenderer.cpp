@@ -22,7 +22,6 @@ GameRenderer GameRenderer::make() {
 	};
 }
 
-const f32 WIDTH = 0.15f;
 Vec3 selectedColor = Color3::WHITE;
 
 void GameRenderer::drawBounds(Aabb aabb) {
@@ -32,9 +31,13 @@ void GameRenderer::drawBounds(Aabb aabb) {
 
 void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected) {
 	gfx.disk(center, radius, color);
-	const auto outlineColor = isSelected ? selectedColor : color / 2.0f;
-	gfx.circle(center, radius + 0.01f, WIDTH, outlineColor);
-	gfx.line(center, center + Vec2::fromPolar(angle, radius - WIDTH / 2.0f), 0.15, outlineColor);
+	const auto outlineColor = this->outlineColor(color, isSelected);
+	gfx.circle(center, radius + 0.01f, outlineWidth, outlineColor);
+	gfx.line(center, center + Vec2::fromPolar(angle, radius - outlineWidth / 2.0f), 0.15, outlineColor);
+}
+
+Vec3 GameRenderer::outlineColor(Vec3 mainColor, bool isSelected) const {
+	return isSelected ? selectedColor : mainColor / 2.0f;
 }
 
 void GameRenderer::drawGrid() {

@@ -19,7 +19,13 @@ struct EditorPolygonShape {
 		EditorPolygonShape operator()();
 	};
 
+	static EditorPolygonShape make();
+
+	void initializeFromVertices(View<const Vec2> inputVertices);
+
 	List<Vec2> vertices;
+	List<i32> trianglesVertices;
+	List<i32> boundaryEdges;
 };
 
 using EditorPolygonShapeId = EntityArrayId<EditorPolygonShape>;

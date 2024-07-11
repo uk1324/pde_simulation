@@ -10,6 +10,10 @@ struct GameRenderer {
 	//void update();
 	//void drawDebugDisplay();
 
+	static constexpr f32 outlineWidth = 0.15f;
+	Vec3 outlineColor(Vec3 mainColor, bool isSelected) const;
+
+
 	void drawGrid();
 
 	Gfx2d gfx;

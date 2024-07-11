@@ -35,7 +35,7 @@ struct Editor {
 	enum class ToolType {
 		SELECT,
 		CIRCLE,
-		RECTANGLE,
+		POLYGON,
 	};
 	ToolType selectedTool = ToolType::CIRCLE;
 
@@ -44,6 +44,15 @@ struct Editor {
 		std::optional<EditorCircleShape> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
 		void render(GameRenderer& gfx, Vec2 cursorPos);
 	} circleTool;
+
+	struct PolygonTool {
+		static PolygonTool make();
+
+		bool update(Vec2 cursorPos, bool drawDown, bool drawUp, bool drawHeld);
+
+		bool drawing;
+		List<Vec2> vertices;
+	} polygonTool;
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
@@ -86,6 +95,6 @@ struct Editor {
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
 	EntityArray<EditorReflectingBody, EditorReflectingBody::DefaultInitialize> reflectingBodies;
-	EntityArrayPair<EditorReflectingBody> createReflectingBody();
+	EntityArrayPair<EditorReflectingBody> createReflectingBody(const EditorShape& shape);
 };
 
