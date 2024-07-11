@@ -426,11 +426,21 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				const auto endIndex = polygon->boundaryEdges[i + 1];
 				renderer.gfx.line(polygon->vertices[startIndex], polygon->vertices[endIndex], GameRenderer::outlineWidth, outlineColor);
 			}
+			for (i64 i = 0; i < polygon->trianglesVertices.size(); i += 3) {
+				Vec2 v[3] = {
+					polygon->vertices[polygon->trianglesVertices[i]],
+					polygon->vertices[polygon->trianglesVertices[i + 1]],
+					polygon->vertices[polygon->trianglesVertices[i + 2]]
+				};
+				renderer.gfx.polygon(constView(v), GameRenderer::outlineWidth, Color3::RED);
+			}
+ 			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Color3::WHITE / 2.0f);
 			break;
 		}
 		}
 	}
 
+	renderer.gfx.drawFilledTriangles();
 	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
@@ -836,7 +846,10 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawUp, boo
 		drawing = true;
 	}
 
-	if (drawHeld) {
+	if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
+		drawing = false;
+		return true;
+	} else if (drawing && drawHeld) {
 		if (vertices.size() == 0) {
 			vertices.add(cursorPos);
 		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
@@ -844,10 +857,6 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawUp, boo
 		}
 	}
 
-	if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
-		drawing = false;
-		return true;
-	}
 	return false;
 }
 
