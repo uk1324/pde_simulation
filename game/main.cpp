@@ -4,7 +4,8 @@
 
 int main() {
  	Engine::initAll(Window::Settings{
-		.maximized = true
+		.maximized = true,
+		.multisamplingSamplesPerPixel = 16
 	});
 
 	EngineUpdateLoop updateLoop(60.0f);

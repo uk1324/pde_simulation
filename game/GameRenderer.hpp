@@ -6,11 +6,13 @@ struct GameRenderer {
 	static GameRenderer make();
 
 	void drawBounds(Aabb aabb);
-	void disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected);
+	void disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected);
 	//void update();
 	//void drawDebugDisplay();
 
-	static constexpr f32 outlineWidth = 0.15f;
+	//static constexpr f32 outlineWidth = 0.15f;
+	//static constexpr f32 outlineWidth = 0.05f;
+	f32 outlineWidth() const;
 	Vec3 outlineColor(Vec3 mainColor, bool isSelected) const;
 
 

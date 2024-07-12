@@ -1,7 +1,7 @@
 #include "HeatEquationDemo.hpp"
 #include <imgui/imgui_internal.h>
 #include <imgui/implot.h>
-#include <engine/Math/Lerp.hpp>
+#include <engine/Math/Interpolation.hpp>
 #include <Span.hpp>
 #include <engine/Input/Input.hpp>
 

@@ -356,7 +356,7 @@ void Simulation::render(GameRenderer& renderer) {
 			switch (type) {
 			case b2_circleShape: {
 				const auto circle = b2Shape_GetCircle(shape);
-				renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Color3::WHITE / 2.0f, false);
+				renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
 				break;
 			}
 	
@@ -374,7 +374,7 @@ void Simulation::render(GameRenderer& renderer) {
 				for (i64 i = 0; i < polygon.count; i++) {
 					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
 					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
-					renderer.gfx.line(previousVertex, currentVertex, GameRenderer::outlineWidth / 5.0f, Color3::WHITE / 2.0f);
+					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
 					previous = i;
 				}
 				break;

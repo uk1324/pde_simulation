@@ -414,7 +414,9 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 			using enum EditorShapeType;
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
-			renderer.disk(circle.center, circle.radius, circle.angle, Color3::WHITE / 2.0f, isSelected);
+			const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, isSelected);
+			renderer.gfx.diskTriangulated(circle.center, circle.radius, Vec4(Color3::WHITE / 2.0f, 0.2f));
+			renderer.gfx.circleTriangulated(circle.center, circle.radius, renderer.outlineWidth(), outlineColor);
 			break;
 		}
 
@@ -425,12 +427,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				break;
 			}
 			const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, isSelected);
+ 			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Vec4(Color3::WHITE / 2.0f, 0.2f));
 			for (i64 i = 0; i < polygon->boundaryEdges.size(); i += 2) {
 				const auto startIndex = polygon->boundaryEdges[i];
 				const auto endIndex = polygon->boundaryEdges[i + 1];
-				renderer.gfx.line(polygon->vertices[startIndex], polygon->vertices[endIndex], GameRenderer::outlineWidth, outlineColor);
+				renderer.gfx.lineTriangulated(polygon->vertices[startIndex], polygon->vertices[endIndex], renderer.outlineWidth(), outlineColor);
 			}
- 			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Color3::WHITE / 2.0f);
 			break;
 		}
 
@@ -438,7 +440,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	renderer.gfx.drawFilledTriangles();
-	renderer.gfx.drawDisks();
+	//renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
 
@@ -456,11 +458,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth, Color3::WHITE);
 		const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, true);
 		if (polygonTool.vertices.size() > 1) {
-			renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth, outlineColor);
+			renderer.gfx.polylineTriangulated(constView(polygonTool.vertices), renderer.outlineWidth(), outlineColor, 10);
 			//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth / 1.3f, outlineColor);
 		} else if (polygonTool.vertices.size() == 1) {
-			renderer.gfx.disk(polygonTool.vertices[0], GameRenderer::outlineWidth / 2.0f, outlineColor);
+			renderer.gfx.disk(polygonTool.vertices[0], renderer.outlineWidth() / 2.0f, outlineColor);
 		}
+		renderer.gfx.drawFilledTriangles();
 		break;
 	}
 		
@@ -827,7 +830,7 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 
 void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos) {
 	if (center.has_value()) {
-		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), Color3::WHITE / 2.0f, false);
+		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), Vec4(Color3::WHITE / 2.0f, 1.0f), false);
 	}
 }
 

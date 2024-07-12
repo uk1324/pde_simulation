@@ -29,11 +29,15 @@ void GameRenderer::drawBounds(Aabb aabb) {
 	gfx.drawLines();
 }
 
-void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec3 color, bool isSelected) {
-	gfx.disk(center, radius, color);
-	const auto outlineColor = this->outlineColor(color, isSelected);
-	gfx.circle(center, radius + 0.01f, outlineWidth, outlineColor);
-	gfx.line(center, center + Vec2::fromPolar(angle, radius - outlineWidth / 2.0f), 0.15, outlineColor);
+void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected) {
+	gfx.diskTriangulated(center, radius, color);
+	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
+	gfx.circleTriangulated(center, radius + 0.01f, outlineWidth(), outlineColor);
+	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), 0.15, outlineColor);
+}
+
+f32 GameRenderer::outlineWidth() const {
+	return 0.005f / gfx.camera.zoom;
 }
 
 Vec3 GameRenderer::outlineColor(Vec3 mainColor, bool isSelected) const {
