@@ -29,27 +29,32 @@ struct Simulation {
 
 	b2WorldId world;
 
-	enum class ObjectShapeType {
+	enum class ShapeType {
 		CIRCLE,
 		POLYGON,
 	};
 
-	struct Object {
-		b2BodyId id;
-		ObjectShapeType shapeType;
+	struct ShapeInfo {
+		ShapeType type;
 		List<Vec2> simplifiedOutline;
-
 		List<Vec2> vertices;
 		List<i32> boundaryEdges;
 		List<i32> trianglesVertices;
-
 		f32 radius;
 	};
-	List<Object> objects;
-	struct TransparentObject {
-		b2BodyId b2Id;
+
+	struct ReflectingObject {
+		b2BodyId id;
+		ShapeInfo shape;
 	};
-	List<TransparentObject> transparentObjects;
+	List<ReflectingObject> reflectingObjects;
+
+	struct TransmissiveObject {
+		b2BodyId id;
+		ShapeInfo shape;
+		f32 speedOfTransmition;
+	};
+	List<TransmissiveObject> transmissiveObjects;
 
 	void getShapes(b2BodyId body);
 	List<b2ShapeId> getShapesResult;

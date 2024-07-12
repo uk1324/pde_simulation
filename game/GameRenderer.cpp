@@ -34,9 +34,9 @@ void GameRenderer::drawBounds(Aabb aabb) {
 void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected) {
 	gfx.diskTriangulated(center, radius, color);
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
-	gfx.circleTriangulated(center, radius + 0.01f, outlineWidth(), outlineColor);
-	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), 0.15, outlineColor);
-}
+	gfx.circleTriangulated(center, radius, outlineWidth(), outlineColor);
+	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), outlineWidth(), outlineColor);
+} 
 
 void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected) {
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
@@ -56,7 +56,7 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 }
 
 f32 GameRenderer::outlineWidth() const {
-	return 0.005f / gfx.camera.zoom;
+	return 0.007f / gfx.camera.zoom;
 }
 
 Vec3 GameRenderer::outlineColor(Vec3 mainColor, bool isSelected) const {

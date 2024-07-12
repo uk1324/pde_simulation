@@ -45,40 +45,39 @@ void MainLoop::update() {
 		if (currentState == State::EDITOR) {
 			currentState = State::SIMULATION;
 			simulation.camera = editor.camera;
-
 			simulation.reset();
-			b2BodyId bodyId = b2_nullBodyId;;
-			// Could reuse vertices
-			auto simplifiedOutline = List<Vec2>::empty();
-			auto vertices = List<Vec2>::empty();
-			auto boundaryEdges = List<i32>::empty();
-			auto triangleVertices = List<i32>::empty();
-			auto shapeType = Simulation::ObjectShapeType::CIRCLE;
-			f32 radius = 0.0f;
 
-			for (auto body : editor.reflectingBodies) {
+			for (auto body : editor.rigidBodies) {
+
+				b2BodyDef bodyDef = b2DefaultBodyDef();
+				bodyDef.type = b2_dynamicBody;
+				b2BodyId bodyId = b2CreateBody(simulation.world, &bodyDef);
+
+				b2ShapeDef shapeDef = b2DefaultShapeDef();
+				shapeDef.density = 1.0f;
+				shapeDef.friction = 0.3f;
+
+				// TODO: Could reuse vertices
+				auto simplifiedOutline = List<Vec2>::empty();
+				auto vertices = List<Vec2>::empty();
+				auto boundaryEdges = List<i32>::empty();
+				auto triangleVertices = List<i32>::empty();
+				auto shapeType = Simulation::ShapeType::CIRCLE;
+				f32 radius = 0.0f;
+
 				switch (body->shape.type) {
 					using enum EditorShapeType;
 				case CIRCLE: {
 					const auto& circle = body->shape.circle;
-					b2BodyDef bodyDef = b2DefaultBodyDef();
-					bodyDef.type = b2_dynamicBody;
-					bodyDef.position = fromVec2(circle.center);
-					bodyDef.angle = circle.angle;
-					bodyId = b2CreateBody(simulation.world, &bodyDef);
-					//b2Polygon dynamicBox = b2MakeBox(0.1f, 10.0f);
 					b2Circle physicsCircle{ .center = b2Vec2(0.0f), .radius = circle.radius };
-
-					b2ShapeDef shapeDef = b2DefaultShapeDef();
-					shapeDef.density = 1.0f;
-					shapeDef.friction = 0.3f;
 					radius = circle.radius;
-
 					b2CreateCircleShape(bodyId, &shapeDef, &physicsCircle);
+					b2Body_SetTransform(bodyId, fromVec2(circle.center), circle.angle);
 					break;
 				}
+
 				case POLYGON: {
-					shapeType = Simulation::ObjectShapeType::POLYGON;
+					shapeType = Simulation::ShapeType::POLYGON;
 					const auto& polygon = editor.polygonShapes.get(body->shape.polygon);
 					if (!polygon.has_value()) {
 						CHECK_NOT_REACHED();
@@ -97,16 +96,6 @@ void MainLoop::update() {
 					triangleVertices = polygon->trianglesVertices.clone();
 					vertices = polygon->vertices.clone();
 
- 					b2BodyDef bodyDef = b2DefaultBodyDef();
-					bodyDef.type = b2_dynamicBody;
-					bodyDef.position = b2Vec2{ 0.0f, 0.0f };
-					bodyDef.angle = 0.0f;
-					bodyId = b2CreateBody(simulation.world, &bodyDef);
-
-					b2ShapeDef shapeDef = b2DefaultShapeDef();
-					shapeDef.density = 1.0f;
-					shapeDef.friction = 0.3f;
-
 					ASSERT(triangulation.size() % 3 == 0);
 					for (i64 i = 0; i < triangulation.size(); i += 3) {
 						b2Hull hull;
@@ -118,24 +107,40 @@ void MainLoop::update() {
 						const auto polygon = b2MakePolygon(&hull, 0.0f);
 						b2CreatePolygonShape(bodyId, &shapeDef, &polygon);
 					}
+					b2Body_SetTransform(bodyId, fromVec2(polygon->translation), polygon->rotation);
 					break;
 				}
 
 				}
 
-				if (B2_ID_EQUALS(bodyId, b2_nullBodyId)) {
-					CHECK_NOT_REACHED();
-				} else {
-					simulation.objects.add(Simulation::Object{ 
-						.id = bodyId, 
-						.shapeType = shapeType, 
-						.simplifiedOutline = std::move(simplifiedOutline),
-						.vertices = std::move(vertices),
-						.boundaryEdges = std::move(boundaryEdges),
-						.trianglesVertices = std::move(triangleVertices),
-						.radius = radius 
+				Simulation::ShapeInfo shapeInfo{
+					.type = shapeType,
+					.simplifiedOutline = std::move(simplifiedOutline),
+					.vertices = std::move(vertices),
+					.boundaryEdges = std::move(boundaryEdges),
+					.trianglesVertices = std::move(triangleVertices),
+					.radius = radius
+				};
+
+				switch (body->material.type) {
+					using enum EditorMaterialType;
+				case RELFECTING:
+					simulation.reflectingObjects.add(Simulation::ReflectingObject{
+						.id = bodyId,
+						.shape = std::move(shapeInfo)
 					});
+					break;
+
+				case TRANSIMISIVE:
+					simulation.transmissiveObjects.add(Simulation::TransmissiveObject{
+						.id = bodyId,
+						.shape = std::move(shapeInfo),
+						.speedOfTransmition = body->material.transimisive.speedOfTransmition
+					});
+					break;
+
 				}
+
 			}
 		} else if (currentState == State::SIMULATION) {
 			currentState = State::EDITOR;

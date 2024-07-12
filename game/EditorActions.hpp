@@ -25,12 +25,12 @@ struct EditorActionSelectionChange {
 
 // Should this store a copy of the reflecting body or should there be a new entity create and this would just store the ids.
 struct EditorActionModifyReflectingBody {
-	EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorReflectingBody& oldEntity, const EditorReflectingBody& newEntity);
+	EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity);
 
 	// Storing the memory inside instead of allocating it somewhere else (for example on the stack), because it adds an pointless indirection. Using a specific type instead of a generic thing, because I don't thinkg it would simplify anything. The entity cases would just need to be handled somewhere else.
 	EditorReflectingBodyId id;
-	EditorReflectingBody oldEntity; 
-	EditorReflectingBody newEntity;
+	EditorRigidBody oldEntity; 
+	EditorRigidBody newEntity;
 };
 
 enum class EditorActionType {

@@ -17,7 +17,8 @@ struct GameRenderer {
 	//static constexpr f32 outlineWidth = 0.05f;
 	f32 outlineWidth() const;
 	Vec3 outlineColor(Vec3 mainColor, bool isSelected) const;
-
+	static constexpr Vec3 defaultColor = Vec3(0.5f);
+	static constexpr f32 transimittingShapeTransparency = 0.3f;
 
 	void drawGrid();
 

@@ -6,7 +6,7 @@
 EditorEntityId::EditorEntityId(const EditorReflectingBodyId& id)
 	: version(id.version())
 	, index(id.index())
-	, type(EditorEntityType::REFLECTING_BODY) {}
+	, type(EditorEntityType::RIGID_BODY) {}
 
 EditorReflectingBodyId EditorEntityId::reflectingBody() const {
 	return EditorReflectingBodyId(index, version);
@@ -17,8 +17,9 @@ EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
 	, radius(radius)
 	, angle(angle) {}
 
-EditorReflectingBody::EditorReflectingBody(const EditorShape& shape)
- : shape(shape) {}
+EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial& material)
+	: shape(shape) 
+	, material(material) {}
 
 EditorPolygonShape EditorPolygonShape::make() {
 	return EditorPolygonShape{
@@ -66,3 +67,35 @@ void EditorPolygonShape::cloneFrom(const EditorPolygonShape& other) {
 	translation = other.translation;
 	rotation = other.rotation;
 }
+
+EditorMaterial::EditorMaterial(const EditorMaterialTransimisive& material)
+	: transimisive(material) 
+	, type(EditorMaterialType::TRANSIMISIVE) {}
+
+EditorMaterial EditorMaterial::makeReflecting() {
+	return EditorMaterial(EditorMaterialType::RELFECTING);
+}
+
+bool EditorMaterial::operator==(const EditorMaterial& other) const {
+	if (type != other.type) {
+		return false;
+	}
+
+	switch (type) {
+		using enum EditorMaterialType;
+
+	case RELFECTING:
+		return true;
+		break;
+
+	case TRANSIMISIVE:
+		return transimisive == other.transimisive;
+		break;
+
+	}
+	CHECK_NOT_REACHED();
+	return false;
+}
+
+EditorMaterial::EditorMaterial(EditorMaterialType type)	
+	: type(type) {}

@@ -24,8 +24,8 @@ Simulation::Simulation()
 	, cellType(Array2d<CellType>::filled(simulationGridSize.x, simulationGridSize.y, CellType::EMPTY))
 	, displayGrid(Array2d<Pixel32>::filled(simulationGridSize.x - 2, simulationGridSize.y - 2, Pixel32(0, 0, 0))) 
 	, displayTexture(makePixelTexture(displayGrid.sizeX(), displayGrid.sizeY()))
-	, objects(List<Object>::empty())
-	, transparentObjects(List<TransparentObject>::empty())
+	, reflectingObjects(List<ReflectingObject>::empty())
+	, transmissiveObjects(List<TransmissiveObject>::empty())
 	, mouseJoint(b2_nullJointId)
 	, getShapesResult(List<b2ShapeId>::empty())
 	, dt(1.0f / 60.0f) {
@@ -39,21 +39,6 @@ Simulation::Simulation()
 		cellType(xi, 0) = CellType::REFLECTING_WALL;
 		cellType(xi, simulationGridSize.y - 1) = CellType::REFLECTING_WALL;
 	}
-
-	//const auto size = 100;
-	//for (i64 i = 0; i < size; i++) {
-	//	const auto j = i - size / 2;
-	//	const auto k = i32((j * j) / 100.0f);
-	//	Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, k);
-	//	fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
-	//}
-
-	//for (i64 i = 0; i < size; i++) {
-	//	const auto j = i - size / 2;
-	//	const auto k = i32((j * j) / 100.0f);
-	//	Vec2T<i64> p(i - size / 2 + simulationGridSize.x / 2, simulationGridSize.y - 1 - k);
-	//	fillCircle(cellType, p, 3, CellType::REFLECTING_WALL);
-	//}
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -84,70 +69,7 @@ Simulation::Simulation()
 
 		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = (boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
 		b2CreatePolygonShape(boundaries, &shapeDef, &right);
-
-		//b2Polygon top = b2MakeOffsetBox(boundsSize.x, halfWidth, b2Vec2{ .x = boundsCenter.x, .y = bounds.max.y + halfWidth }, 0.0f);
-		//b2CreatePolygonShape(boundaries, &shapeDef, &top);
-
-		//b2Polygon left = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.min.x - halfWidth, .y = boundsCenter.y }, 0.0f);
-		//b2CreatePolygonShape(boundaries, &shapeDef, &left);
-
-		//b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y, b2Vec2{ .x = bounds.max.x + halfWidth, .y = boundsCenter.y }, 0.0f);
-		//b2CreatePolygonShape(boundaries, &shapeDef, &right);
 	}
-
-	//for (i64 i = 0; i < 15; i++) {
-	//	b2BodyDef bodyDef = b2DefaultBodyDef();
-	//	bodyDef.type = b2_dynamicBody;
-	//	bodyDef.position = b2Vec2{ 0.0f, 10.0f };
-	//	b2BodyId bodyId = b2CreateBody(world, &bodyDef);
-	//	b2Polygon dynamicBox = b2MakeBox(1.0f, 1.0f);
-
-	//	b2ShapeDef shapeDef = b2DefaultShapeDef();
-	//	shapeDef.density = 1.0f;
-	//	shapeDef.friction = 0.3f;
-
-	//	b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
-
-	//	objects.add(Object{
-	//		.id = bodyId
-	//	});
-	//}
-
-	//for (i64 i = 0; i < 15; i++) {
-	//	b2BodyDef bodyDef = b2DefaultBodyDef();
-	//	bodyDef.type = b2_dynamicBody;
-	//	bodyDef.position = b2Vec2{ 0.0f, 10.0f };
-	//	b2BodyId bodyId = b2CreateBody(world, &bodyDef);
-	//	b2Polygon dynamicBox = b2MakeBox(1.0f, 1.0f);
-
-	//	b2ShapeDef shapeDef = b2DefaultShapeDef();
-	//	shapeDef.density = 1.0f;
-	//	shapeDef.friction = 0.3f;
-
-	//	b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
-
-	//	transparentObjects.add(TransparentObject{
-	//		.b2Id = bodyId
-	//	});
-	//}
-
-	//for (i64 i = 0; i < 1; i++) {
-	//	b2BodyDef bodyDef = b2DefaultBodyDef();
-	//	bodyDef.type = b2_dynamicBody;
-	//	bodyDef.position = b2Vec2{ 0.0f, 10.0f };
-	//	b2BodyId bodyId = b2CreateBody(world, &bodyDef);
-	//	b2Polygon dynamicBox = b2MakeBox(0.1f, 10.0f);
-
-	//	b2ShapeDef shapeDef = b2DefaultShapeDef();
-	//	shapeDef.density = 1.0f;
-	//	shapeDef.friction = 0.3f;
-
-	//	b2CreatePolygonShape(bodyId, &shapeDef, &dynamicBox);
-
-	//	transparentObjects.add(TransparentObject{
-	//		.b2Id = bodyId
-	//	});
-	//}
 }
 
 void Simulation::update(GameRenderer& renderer, const GameInput& input) {
@@ -160,17 +82,10 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		cursorSimulationGridPos = *cursorDisplayGridPos + Vec2T<i64>(1);
 	}
 	if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-		//u(cursorGridPos->x, gridSize.y - 1 - cursorGridPos->y) = 100.0f;
 		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
 	}
 
 	cameraMovement(camera, input, dt);
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::MIDDLE)) {
-	//	fillCircle(cellType, *cursorSimulationGridPos, 3, CellType::REFLECTING_WALL);
-	//}
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-	//	fillCircle(cellType, *cursorSimulationGridPos, 3, CellType::EMPTY);
-	//}
 	
 	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
 	
@@ -182,68 +97,57 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 
 	fill(cellType, CellType::EMPTY);
 
+	#define FILL_SHAPE(TO_EXECUTE) \
+		const auto position = toVec2(b2Body_GetPosition(object.id)); \
+		const auto rotation = b2Body_GetAngle(object.id); \
+		switch (object.shape.type) { \
+			using enum ShapeType; \
+			\
+		case CIRCLE: { \
+			const auto shapeAabb = circleAabb(position, object.shape.radius); \
+			const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize); \
+			for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) { \
+				for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) { \
+					const auto cellCenter = calculateCellCenter(xi, yi); \
+					if (isPointInCircle(position, object.shape.radius, cellCenter)) { \
+						TO_EXECUTE \
+					} \
+				} \
+			} \
+			break; \
+		} \
+		case POLYGON: { \
+			const auto shapeAabb = transformedPolygonAabb(constView(object.shape.simplifiedOutline), position, rotation); \
+			const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize); \
+			const auto rotate = Rotation(-rotation); \
+			for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) { \
+				for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) { \
+					auto cellCenter = calculateCellCenter(xi, yi); \
+					cellCenter -= position; \
+					cellCenter *= rotate; \
+					if (isPointInPolygon(constView(object.shape.simplifiedOutline), cellCenter)) { \
+						TO_EXECUTE \
+					} \
+				} \
+			} \
+			break; \
+		} \
+		\
+		}
 
 	const auto simulationGridBounds = this->simulationGridBounds();
 	auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
 		return Vec2(x - 0.5f, y - 0.5f) * Constants::CELL_SIZE + simulationGridBounds.min;
 	};
-	{
-		for (const auto& object : objects) {
-			const auto position = toVec2(b2Body_GetPosition(object.id));
-			const auto rotation = b2Body_GetAngle(object.id);
-			switch (object.shapeType) {
-				using enum ObjectShapeType;
-			case CIRCLE: {
-				const auto shapeAabb = circleAabb(position, object.radius);
-				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
-				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
-					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = calculateCellCenter(xi, yi);
-						if (isPointInCircle(position, object.radius, cellCenter)) {
-							cellType(xi, yi) = CellType::REFLECTING_WALL;
-						}
-					}
-				}
-				break;
-			}
-			case POLYGON: {
-				const auto shapeAabb = transformedPolygonAabb(constView(object.simplifiedOutline), position, rotation);
-				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
-				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
-					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						auto cellCenter = calculateCellCenter(xi, yi);
-						cellCenter -= position;
-						cellCenter *= Rotation(-rotation);
-						if (isPointInPolygon(constView(object.simplifiedOutline), cellCenter)) {
-							cellType(xi, yi) = CellType::REFLECTING_WALL;
-						}
-					}
-				}
-				break;
-			}
-
-			}
-		}
+	for (const auto& object : reflectingObjects) {
+		FILL_SHAPE(cellType(xi, yi) = CellType::REFLECTING_WALL;)
 	}
 	{
 		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
 		fill(speedSquared, pow(defaultSpeed, 2.0f));
-
-		for (const auto& object : transparentObjects) {
-			getShapes(object.b2Id);
-			for (auto& shapeId : getShapesResult) {
-				const auto shapeAabb = bShape_GetAABB(shapeId);
-				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
-
-				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
-					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
-						const auto cellCenter = calculateCellCenter(xi, yi);
-						/*if (bShape_TestPoint(shapeId, cellCenter)) {
-							speedSquared(xi, yi) = pow(defaultSpeed * 0.4, 2.0f);
-						}*/
-					}
-				}
-			}
+		for (const auto& object : transmissiveObjects) {
+			const auto speedOfTransmitionSquared = pow(object.speedOfTransmition, 2.0f);
+			FILL_SHAPE(speedSquared(xi, yi) = speedOfTransmitionSquared;)
 		}
 	}
 
@@ -347,67 +251,29 @@ void Simulation::render(GameRenderer& renderer) {
 
 	renderer.drawBounds(displayGridBounds());
 
-	for (const auto& object : objects) {
-		const auto position = toVec2(b2Body_GetPosition(object.id));
-		f32 rotation = b2Body_GetAngle(object.id);
+	auto renderShape = [this, &renderer](b2BodyId id, const ShapeInfo& shape, bool isTransmissive) {
+		const auto color = Vec4(GameRenderer::defaultColor, isTransmissive ? GameRenderer::transimittingShapeTransparency : 1.0f);
+		const auto position = toVec2(b2Body_GetPosition(id));
+		f32 rotation = b2Body_GetAngle(id);
 
-		switch (object.shapeType) {
-			using enum ObjectShapeType;
+		switch (shape.type) {
+			using enum ShapeType;
 		case CIRCLE:
-			renderer.disk(position, object.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
+			renderer.disk(position, shape.radius, rotation, color, false);
 			break;
 
 		case POLYGON:
-			renderer.polygon(object.vertices, object.boundaryEdges, object.trianglesVertices, position, rotation, Vec4(Color3::WHITE / 2.0f, 0.6f), false);
+			renderer.polygon(shape.vertices, shape.boundaryEdges, shape.trianglesVertices, position, rotation, color, false);
 			break;
 		}
-		//getShapes(object.id);
-		//for (auto& shape : getShapesResult) {
-		//	auto type = b2Shape_GetType(shape);
-		//	switch (type) {
-		//	case b2_circleShape: {
-		//		const auto circle = b2Shape_GetCircle(shape);
-		//		renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
-		//		break;
-		//	}
-	
-		//	case b2_polygonShape: {
-		//		renderer.polygon()
-		//		/*
-		//		Debug
-		//		const auto rotate = Rotation(rotation);
-		//		const auto polygon = b2Shape_GetPolygon(shape);
+	};
 
-		//		auto transform = [&](Vec2 v) -> Vec2 {
-		//			v *= rotate;
-		//			v += position;
-		//			return v;
-		//		};
-
-		//		i64 previous = polygon.count - 1;
-		//		for (i64 i = 0; i < polygon.count; i++) {
-		//			const auto currentVertex = transform(toVec2(polygon.vertices[i]));
-		//			const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
-		//			renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
-		//			previous = i;
-		//		}*/
-		//		break;
-		//	}
-
-		//	case b2_capsuleShape:
-		//	case b2_segmentShape:
-		//	case b2_smoothSegmentShape:
-		//	case b2_shapeTypeCount:
-		//		ASSERT_NOT_REACHED();
-		//		break;
-		//	}
-		//}
+	for (const auto& object : reflectingObjects) {
+		renderShape(object.id, object.shape, false);
 	}
 
-	for (const auto& object : transparentObjects) {
-		b2Vec2 position = b2Body_GetPosition(object.b2Id);
-		f32 rotation = b2Body_GetAngle(object.b2Id);
-		renderer.gfx.box(toVec2(position), Vec2(1.0f), rotation, 0.1f, Color3::BLACK);
+	for (const auto& object : transmissiveObjects) {
+		renderShape(object.id, object.shape, true);
 	}
 
 	renderer.gfx.drawDisks();
@@ -418,10 +284,16 @@ void Simulation::render(GameRenderer& renderer) {
 }
 
 void Simulation::reset() {
-	for (auto& object : objects) {
+	for (auto& object : reflectingObjects) {
 		b2DestroyBody(object.id);
 	}
-	objects.clear();
+	reflectingObjects.clear();
+
+	for (auto& object : transmissiveObjects) {
+		b2DestroyBody(object.id);
+	}
+	transmissiveObjects.clear();
+
 	fill(u, 0.0f);
 	fill(u_t, 0.0f);
 }

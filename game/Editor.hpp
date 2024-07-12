@@ -38,17 +38,22 @@ struct Editor {
 	struct CircleTool {
 		std::optional<Vec2> center;
 		std::optional<EditorCircleShape> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
-		void render(GameRenderer& gfx, Vec2 cursorPos);
+		void render(GameRenderer& gfx, Vec2 cursorPos, Vec4 color);
 	} circleTool;
 
 	struct PolygonTool {
 		static PolygonTool make();
 
-		bool update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown);
+		bool update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown, bool cancelDrawingDown);
 
 		bool drawing;
 		List<Vec2> vertices;
 	} polygonTool;
+
+	EditorMaterialType materialTypeSetting;
+	EditorMaterialTransimisive materialTransimisiveSetting = EditorMaterialTransimisive{ .speedOfTransmition = 1.0f };
+	EditorMaterial materialSetting() const;
+	void materialSettingGui();
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
@@ -94,7 +99,7 @@ struct Editor {
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
-	EntityArray<EditorReflectingBody, EditorReflectingBody::DefaultInitialize> reflectingBodies;
-	EntityArrayPair<EditorReflectingBody> createReflectingBody(const EditorShape& shape);
+	EntityArray<EditorRigidBody, EditorRigidBody::DefaultInitialize> rigidBodies;
+	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material);
 };
 

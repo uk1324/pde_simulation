@@ -47,25 +47,53 @@ struct EditorShape {
 	explicit EditorShape(const EditorPolygonShapeId& polygon);
 
 	EditorShapeType type;
+	// TODO: Could have the position and rotation inside here instead of being inside the union.
 
 	bool operator==(const EditorShape& other) const;
 };
 
-struct EditorReflectingBody {
-	struct DefaultInitialize {
-		EditorReflectingBody operator()();
-	};
-	EditorReflectingBody(const EditorShape& shape);
-
-	EditorShape shape;
-
-	bool operator==(const EditorReflectingBody&) const = default;
+enum class EditorMaterialType {
+	RELFECTING,
+	TRANSIMISIVE
 };
 
-using EditorReflectingBodyId = EntityArrayId<EditorReflectingBody>;
+struct EditorMaterialTransimisive {
+	f32 speedOfTransmition;
+
+	bool operator==(const EditorMaterialTransimisive&) const = default;
+};
+
+struct EditorMaterial {
+	union {
+		EditorMaterialTransimisive transimisive;
+	};
+	EditorMaterialType type;
+
+	EditorMaterial(const EditorMaterialTransimisive& material);
+	static EditorMaterial makeReflecting();
+
+	bool operator==(const EditorMaterial& other) const;
+
+private:
+	EditorMaterial(EditorMaterialType type);
+};
+
+struct EditorRigidBody {
+	struct DefaultInitialize {
+		EditorRigidBody operator()();
+	};
+	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material);
+
+	EditorShape shape;
+	EditorMaterial material;
+
+	bool operator==(const EditorRigidBody&) const = default;
+};
+
+using EditorReflectingBodyId = EntityArrayId<EditorRigidBody>;
 
 enum class EditorEntityType {
-	REFLECTING_BODY
+	RIGID_BODY
 };
 
 struct EditorEntityId {

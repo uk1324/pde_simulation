@@ -116,7 +116,7 @@ EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> ol
 EditorActionDestroyEntity::EditorActionDestroyEntity(EditorEntityId id) 
     : id(id) {}
 
-EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorReflectingBody& oldEntity, const EditorReflectingBody& newEntity)
+EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity)
     : id(id)
     , oldEntity(oldEntity)
     , newEntity(newEntity) {}

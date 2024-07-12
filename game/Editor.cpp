@@ -42,7 +42,7 @@ Editor Editor::make() {
 		.roomBounds = Constants::gridBounds(Constants::DEFAULT_GRID_SIZE),
 		.actions = EditorActions::make(),
 		.polygonShapes = decltype(polygonShapes)::make(),
-		.reflectingBodies = decltype(reflectingBodies)::make(),
+		.rigidBodies = decltype(rigidBodies)::make(),
 	};
 
 	editor.camera.pos = editor.roomBounds.center();
@@ -53,7 +53,7 @@ Editor Editor::make() {
 }
 
 void Editor::update(GameRenderer& renderer, const GameInput& input) {
-	reflectingBodies.update();
+	rigidBodies.update();
 
 	if (input.undoDown) {
 		if (actions.lastDoneAction >= 0 && actions.lastDoneAction < actions.actions.size()) {
@@ -92,7 +92,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 	}
 			   
 	case POLYGON:
-		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftHeld, Input::isKeyDown(KeyCode::LEFT_SHIFT));
+		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftHeld, Input::isKeyDown(KeyCode::LEFT_SHIFT), input.cursorRightDown);
 		if (finished) {
 			auto shape = createPolygonShape();
 			shape->initializeFromVertices(constView(polygonTool.vertices));
@@ -130,8 +130,8 @@ void Editor::selectToolUpdate(const GameInput& input) {
 			for (auto& entity : selectedEntities) {
 				switch (entity.type) {
 					using enum EditorEntityType;
-				case REFLECTING_BODY: {
-					auto body = reflectingBodies.get(entity.reflectingBody());
+				case RIGID_BODY: {
+					auto body = rigidBodies.get(entity.reflectingBody());
 					if (!body.has_value()) {
 						CHECK_NOT_REACHED();
 						continue;
@@ -157,16 +157,16 @@ void Editor::selectToolUpdate(const GameInput& input) {
 			for (auto& entity : selectedEntities) {
 				switch (entity.type) {
 					using enum EditorEntityType;
-				case REFLECTING_BODY: {
-					auto body = reflectingBodies.get(entity.reflectingBody());
+				case RIGID_BODY: {
+					auto body = rigidBodies.get(entity.reflectingBody());
 					if (!body.has_value()) {
 						CHECK_NOT_REACHED();
 						continue;
 					}
-					const auto old = EditorReflectingBody(gizmoSelectedShapesAtGrabStart[i]);
+					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material);
 					auto newShape = cloneShape(old.shape);
 					shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
-					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorReflectingBody(newShape))));
+					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorRigidBody(newShape, body->material))));
 					break;
 
 				}
@@ -216,7 +216,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 					selectedEntities.clear();
 				}
 
-				for (auto body : reflectingBodies) {
+				for (auto body : rigidBodies) {
 					if (isEditorShapeContainedInAabb(body->shape, *selectionBox)) {
 						selectedEntities.insert(EditorEntityId(body.id));
 					}
@@ -229,7 +229,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				// Place the joints on top. Iterate over them first.
 
 				if (!entityUnderCursor.has_value()) {
-					for (auto body : reflectingBodies) {
+					for (auto body : rigidBodies) {
 						if (isPointInEditorShape(body->shape, input.cursorPos)) {
 							entityUnderCursor = EditorEntityId(body.id);
 							break;
@@ -261,6 +261,17 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				actions.addSelectionChange(*this, selectedEntitiesBefore, selectedEntities);
 			}
 		}
+	}
+
+	if (input.deleteDown) {
+		actions.beginMulticommand();
+		for (auto& entity : selectedEntities) {
+			destoryEntity(entity);
+		}
+		std::unordered_set<EditorEntityId> empty;
+		actions.addSelectionChange(*this, selectedEntities, empty);
+		selectedEntities.clear();
+		actions.endMulticommand();
 	}
 }
 
@@ -295,7 +306,8 @@ void Editor::gui() {
 		ImGui::EndMainMenuBar();
 	}
 
-	if (ImGui::Begin(settingsWindowName)) {
+	ImGui::Begin(settingsWindowName);
+	{
 	
 		struct ToolDisplay {
 			ToolType type;
@@ -332,14 +344,16 @@ void Editor::gui() {
 			break;
 
 		case POLYGON:
+			materialSettingGui();
 			break;
 
 		case CIRCLE:
+			materialSettingGui();
 			break;
 		}
 
-		ImGui::End();
 	}
+	ImGui::End();
 }
 
 void Editor::selectToolGui() {
@@ -359,8 +373,8 @@ void Editor::entityGui(EditorEntityId id) {
 		switch (id.type) {
 			using enum EditorEntityType;
 
-		case REFLECTING_BODY: {
-			auto body = reflectingBodies.get(id.reflectingBody());
+		case RIGID_BODY: {
+			auto body = rigidBodies.get(id.reflectingBody());
 			if (!body.has_value()) {
 				CHECK_NOT_REACHED();
 				break;
@@ -408,16 +422,22 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 
 	renderer.drawBounds(roomBounds);
 
-	for (const auto& body : reflectingBodies) {
+	auto materialTypeToColor = [](EditorMaterialType materialType, Vec3 color) -> Vec4 {
+		if (materialType == EditorMaterialType::TRANSIMISIVE) {
+			return Vec4(color, GameRenderer::transimittingShapeTransparency);
+		}
+		return Vec4(color, 1.0f);
+	};
+
+	for (const auto& body : rigidBodies) {
 		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(body.id));
+		const auto color = materialTypeToColor(body->material.type, GameRenderer::defaultColor);
 
 		switch (body->shape.type) {
 			using enum EditorShapeType;
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
-			const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, isSelected);
-			renderer.gfx.diskTriangulated(circle.center, circle.radius, Vec4(Color3::WHITE / 2.0f, 0.2f));
-			renderer.gfx.circleTriangulated(circle.center, circle.radius, renderer.outlineWidth(), outlineColor);
+			renderer.disk(circle.center, circle.radius, circle.angle, color, isSelected);
 			break;
 		}
 
@@ -427,7 +447,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				CHECK_NOT_REACHED();
 				break;
 			}
-			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, Vec4(Color3::WHITE / 2.0f, 0.2f), isSelected);
+			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected);
 			break;
 		}
 
@@ -435,28 +455,21 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	renderer.gfx.drawFilledTriangles();
-	//renderer.gfx.drawDisks();
-	renderer.gfx.drawCircles();
-	renderer.gfx.drawLines();
 
 	switch (selectedTool) {
 		using enum ToolType;
 
 	case CIRCLE:
-		circleTool.render(renderer, input.cursorPos);
-		renderer.gfx.drawDisks();
-		renderer.gfx.drawCircles();
-		renderer.gfx.drawLines();
+		circleTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor));
+		renderer.gfx.drawFilledTriangles();
 		break;
 
 	case POLYGON: {
-		//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth, Color3::WHITE);
-		const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, true);
+		const auto outlineColor = renderer.outlineColor(GameRenderer::defaultColor, true);
 		if (polygonTool.vertices.size() > 1) {
 			renderer.gfx.polylineTriangulated(constView(polygonTool.vertices), renderer.outlineWidth(), outlineColor, 10);
-			//renderer.gfx.polyline(constView(polygonTool.vertices), GameRenderer::outlineWidth / 1.3f, outlineColor);
 		} else if (polygonTool.vertices.size() == 1) {
-			renderer.gfx.disk(polygonTool.vertices[0], renderer.outlineWidth() / 2.0f, outlineColor);
+			renderer.gfx.diskTriangulated(polygonTool.vertices[0], renderer.outlineWidth() / 2.0f, Vec4(outlineColor, 1.0f));
 		}
 		renderer.gfx.drawFilledTriangles();
 		break;
@@ -539,7 +552,7 @@ void Editor::redoAction(const EditorAction& action) {
 
 	case MODIFY_REFLECTING_BODY: {
 		const auto& a = action.modifyReflectingBody;
-		auto body = reflectingBodies.get(a.id);
+		auto body = rigidBodies.get(a.id);
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -575,7 +588,7 @@ void Editor::undoAction(const EditorAction& action) {
 
 	case MODIFY_REFLECTING_BODY: {
 		const auto& a = action.modifyReflectingBody;
-		auto body = reflectingBodies.get(a.id);
+		auto body = rigidBodies.get(a.id);
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -630,8 +643,8 @@ bool Editor::isEditorShapeContainedInAabb(const EditorShape& shape, const Aabb& 
 void Editor::fullyDeleteEntity(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY: {
-		const auto entity = reflectingBodies.getEvenIfInactive(id.reflectingBody());
+	case RIGID_BODY: {
+		const auto entity = rigidBodies.getEvenIfInactive(id.reflectingBody());
 		if (!entity.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -647,8 +660,8 @@ void Editor::activateEntity(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
 
-	case REFLECTING_BODY:
-		reflectingBodies.activate(id.reflectingBody());
+	case RIGID_BODY:
+		rigidBodies.activate(id.reflectingBody());
 		break;
 	}
 }
@@ -656,8 +669,8 @@ void Editor::activateEntity(const EditorEntityId& id) {
 void Editor::deactivateEntity(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY:
-		reflectingBodies.deactivate(id.reflectingBody());
+	case RIGID_BODY:
+		rigidBodies.deactivate(id.reflectingBody());
 		break;
 	}
 }
@@ -677,7 +690,7 @@ void Editor::destoryEntity(const EditorEntityId& id) {
 	actions.add(*this, EditorAction(EditorActionDestroyEntity(id)));
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY: {
+	case RIGID_BODY: {
 		deactivateEntity(id);
 		break;
 	}
@@ -699,11 +712,82 @@ EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
 	return EditorShape(shape.id);
 }
 
+EditorMaterial Editor::materialSetting() const {
+	switch (materialTypeSetting) {
+		using enum EditorMaterialType;
+	case RELFECTING:
+		return EditorMaterial::makeReflecting();
+
+	case TRANSIMISIVE:
+		return EditorMaterial(materialTransimisiveSetting);
+	}
+
+	CHECK_NOT_REACHED();
+	return EditorMaterial::makeReflecting();
+}
+
+void Editor::materialSettingGui() {
+	ImGui::SeparatorText("material");
+
+	auto materialTypeName = [](EditorMaterialType type) -> const char* {
+		switch (type) {
+			using enum EditorMaterialType;
+		case RELFECTING: return "reflecting";
+		case TRANSIMISIVE: return "transimisive";
+		}
+		CHECK_NOT_REACHED();
+		return "";
+	};
+
+	struct Entry {
+		EditorMaterialType type;
+		// Could add tooltip.
+	};
+
+	Entry entries[]{
+		{ EditorMaterialType::RELFECTING },
+		{ EditorMaterialType::TRANSIMISIVE }
+	};
+	const char* preview = materialTypeName(materialTypeSetting);
+
+	if (ImGui::BeginCombo("type", preview)) {
+		for (auto& entry : entries) {
+			const auto isSelected = entry.type == materialTypeSetting;
+			if (ImGui::Selectable(materialTypeName(entry.type), isSelected)) {
+				materialTypeSetting = entry.type;
+			}
+				
+			if (isSelected) {
+				ImGui::SetItemDefaultFocus();
+			}
+				
+		}
+		ImGui::EndCombo();
+	}
+
+	switch (materialTypeSetting) {
+		using enum EditorMaterialType;
+
+	case RELFECTING:
+		break;
+	case TRANSIMISIVE:
+		if (Gui::beginPropertyEditor()) {
+			Gui::inputFloat("speed of transmission", materialTransimisiveSetting.speedOfTransmition);
+			// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
+			materialTransimisiveSetting.speedOfTransmition = std::max(materialTransimisiveSetting.speedOfTransmition, 0.0f);
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
+		break;
+	}
+
+}
+
 Vec2 Editor::entityGetPosition(const EditorEntityId& id) const {
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY: {
-		const auto body = reflectingBodies.get(id.reflectingBody());
+	case RIGID_BODY: {
+		const auto body = rigidBodies.get(id.reflectingBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -719,8 +803,8 @@ Vec2 Editor::entityGetPosition(const EditorEntityId& id) const {
 void Editor::entitySetPosition(const EditorEntityId& id, Vec2 position) {
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY: {
-		auto body = reflectingBodies.get(id.reflectingBody());
+	case RIGID_BODY: {
+		auto body = rigidBodies.get(id.reflectingBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -756,8 +840,8 @@ Vec2 Editor::shapeGetPosition(const EditorShape& shape) const {
 Vec2 Editor::entityGetCenter(const EditorEntityId& id) const {
 	switch (id.type) {
 		using enum EditorEntityType;
-	case REFLECTING_BODY: {
-		const auto body = reflectingBodies.get(id.reflectingBody());
+	case RIGID_BODY: {
+		const auto body = rigidBodies.get(id.reflectingBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -858,14 +942,15 @@ EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	return shape;
 }
 
-EntityArrayPair<EditorReflectingBody> Editor::createReflectingBody(const EditorShape& shape) {
-	auto body = reflectingBodies.create();
+EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material) {
+	auto body = rigidBodies.create();
 	body->shape = shape;
+	body->material = material;
 	return body;
 }
 
 void Editor::createObject(EditorShape&& shape) {	
- 	auto body = createReflectingBody(shape);
+ 	auto body = createRigidBody(shape, materialSetting());
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
 	actions.add(*this, EditorAction(std::move(action)));
 }
@@ -876,8 +961,8 @@ EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
 	return EditorPolygonShape::make();
 }
 
-EditorReflectingBody EditorReflectingBody::DefaultInitialize::operator()() {
-	return EditorReflectingBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)));
+EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
+	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting());
 }
 
 std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
@@ -900,9 +985,9 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 	return result;
 }
 
-void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos) {
+void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color) {
 	if (center.has_value()) {
-		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), Vec4(Color3::WHITE / 2.0f, 1.0f), false);
+		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, false);
 	}
 }
 
@@ -913,7 +998,7 @@ Editor::PolygonTool Editor::PolygonTool::make() {
 	};
 }
 
-bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown) {
+bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown, bool cancelDrawingDown) {
 	/*
 	Not sure what is the best way to make the polygon drawing work. 
 	It's nice to be able to swicht between straight lines and normal drawing and it's also nice to be able to just draw a shape and have the line connect to the endpoint without having to move the cursor there.
@@ -923,6 +1008,12 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, b
 	Number 1 makes drawing straight lines less comfortable and number 2 makes finishing the curve less comfortable.
 	Number 2 probably should have an undo redo.
 	*/
+
+	if (cancelDrawingDown) {
+		drawing = false;
+		vertices.clear();
+		return false;
+	}
 
 	if (drawDown) {
 		drawing = true;
