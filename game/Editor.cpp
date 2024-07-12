@@ -2,6 +2,7 @@
 #include <game/Editor.hpp>
 #include <game/Constants.hpp>
 #include <engine/Math/PointInShape.hpp>
+#include <engine/Math/ShapeAabb.hpp>
 #include <engine/Input/Input.hpp>
 #include <game/Shared.hpp>
 #include <engine/Math/Color.hpp>
@@ -392,7 +393,7 @@ void Editor::shapeGui(EditorShape& shape) {
 	}
 
 	case POLYGON:
-		ASSERT_NOT_REACHED();
+		break;
 
 	}
 }
@@ -426,13 +427,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				CHECK_NOT_REACHED();
 				break;
 			}
-			const auto outlineColor = renderer.outlineColor(Color3::WHITE / 2.0f, isSelected);
- 			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Vec4(Color3::WHITE / 2.0f, 0.2f));
-			for (i64 i = 0; i < polygon->boundaryEdges.size(); i += 2) {
-				const auto startIndex = polygon->boundaryEdges[i];
-				const auto endIndex = polygon->boundaryEdges[i + 1];
-				renderer.gfx.lineTriangulated(polygon->vertices[startIndex], polygon->vertices[endIndex], renderer.outlineWidth(), outlineColor);
-			}
+			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, Vec4(Color3::WHITE / 2.0f, 0.2f), isSelected);
 			break;
 		}
 
@@ -612,10 +607,10 @@ Aabb Editor::editorShapeAabb(const EditorShape& shape) const {
 	case CIRCLE: 
 		return Aabb(shape.circle.center - Vec2(shape.circle.radius), shape.circle.center + Vec2(shape.circle.radius));
 
-	case POLYGON: {
-		ASSERT_NOT_REACHED();
-		//polygonShapes.destroy(shape.polygon);
-		break;
+	case POLYGON: { 
+		const auto& polygon = polygonShapes.get(shape.polygon);
+		// @Performance. Could use the boundary instead of using all the vertices.
+		return transformedPolygonAabb(constView(polygon->vertices), polygon->translation, polygon->rotation);
 	}
 
 	}
@@ -671,7 +666,7 @@ Vec2 Editor::selectedEntitiesCenter() {
 	Vec2 center(0.0f);
 
 	for (const auto& entity : selectedEntities) {
-		center += entityGetPosition(entity);
+		center += entityGetCenter(entity);
 	}
 	center /= selectedEntities.size();
 
@@ -704,7 +699,7 @@ EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
 	return EditorShape(shape.id);
 }
 
-Vec2 Editor::entityGetPosition(const EditorEntityId& id) {
+Vec2 Editor::entityGetPosition(const EditorEntityId& id) const {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case REFLECTING_BODY: {
@@ -744,13 +739,80 @@ Vec2 Editor::shapeGetPosition(const EditorShape& shape) const {
 	switch (shape.type) {
 		using enum EditorShapeType;
 	case CIRCLE: return shape.circle.center;
-	case POLYGON:
-		ASSERT_NOT_REACHED();
-		break;
+	case POLYGON: {
+		const auto polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			break;
+		}
+		return polygon->translation;
+	}
+
 	}
 
 	CHECK_NOT_REACHED();
 	return Vec2(0.0f);
+}
+
+Vec2 Editor::entityGetCenter(const EditorEntityId& id) const {
+	switch (id.type) {
+		using enum EditorEntityType;
+	case REFLECTING_BODY: {
+		const auto body = reflectingBodies.get(id.reflectingBody());
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		return shapeGetCenter(body->shape);
+	}
+
+	}
+
+	CHECK_NOT_REACHED();
+	return Vec2(0.0f);
+}
+
+Vec2 Editor::shapeGetCenter(const EditorShape& shape) const {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE: return shape.circle.center;
+	case POLYGON: {
+		const auto polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			break;
+		}
+		Vec2 center(0.0f);
+		for (i32 i = 0; i < polygon->boundaryEdges.size(); i++) {
+			center += polygon->vertices[polygon->boundaryEdges[i]];
+		}
+		center /= f32(polygon->boundaryEdges.size());
+		return center += polygon->translation;
+	}
+
+	}
+
+	CHECK_NOT_REACHED();
+	return Vec2(0.0f);
+}
+
+bool Editor::isPointInEditorShape(const EditorShape& shape, Vec2 point) const {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE:
+		return isPointInCircle(shape.circle.center, shape.circle.radius, point);
+	case POLYGON:
+		const auto polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			break;
+		}
+		// @Performance
+		auto vertices = List<Vec2>::empty();
+		for (i64 i = 0; i < polygon->boundaryEdges.size(); i += 2) {
+			vertices.add(polygon->vertices[polygon->boundaryEdges[i]]);
+		}
+		return isPointInTransformedPolygon(constView(vertices), polygon->translation, polygon->rotation, point);
+	}
+	CHECK_NOT_REACHED();
+	return false;
 }
 
 void Editor::shapeSetPosition(EditorShape& shape, Vec2 position) {
@@ -758,8 +820,12 @@ void Editor::shapeSetPosition(EditorShape& shape, Vec2 position) {
 		using enum EditorShapeType;
 	case CIRCLE: shape.circle.center = position; break;
 	case POLYGON:
-		ASSERT_NOT_REACHED();
-		break;
+		auto polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			CHECK_NOT_REACHED();
+			return;
+		}
+		polygon->translation = position;
 	}
 }
 
@@ -768,11 +834,17 @@ EditorShape Editor::cloneShape(const EditorShape& shape) {
 		using enum EditorShapeType;
 	case CIRCLE:
 		return shape;
-		break;
 
-	case POLYGON:
-		ASSERT_NOT_REACHED();
-		break;
+	case POLYGON: {
+		auto newPolygon = createPolygonShape();
+		const auto polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			break;
+		}
+		newPolygon->cloneFrom(*polygon);
+		return EditorShape(newPolygon.id);
+	}
+		
 	}
 
 	CHECK_NOT_REACHED();
@@ -882,22 +954,4 @@ std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 
 	}
 
 	return box;
-}
-
-bool isPointInEditorShape(const EditorShape& shape, Vec2 point) {
-	switch (shape.type) {
-		using enum EditorShapeType;
-	case CIRCLE:
-		return isPointInCircle(shape.circle.center, shape.circle.radius, point);
-	case POLYGON:
-		ASSERT_NOT_REACHED();
-		return false;
-	}
-	CHECK_NOT_REACHED();
-	return false;
-}
-
-bool isCircleInsideAabb(Vec2 center, f32 radius, const Aabb& aabb)
-{
-	return false;
 }

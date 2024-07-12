@@ -7,6 +7,9 @@ struct GameRenderer {
 
 	void drawBounds(Aabb aabb);
 	void disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected);
+	void polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected);
+
+	List<Vec2> tempVertices;
 	//void update();
 	//void drawDebugDisplay();
 

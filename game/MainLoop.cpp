@@ -48,7 +48,11 @@ void MainLoop::update() {
 
 			simulation.reset();
 			b2BodyId bodyId = b2_nullBodyId;;
-			auto outline = List<Vec2>::empty();
+			// Could reuse vertices
+			auto simplifiedOutline = List<Vec2>::empty();
+			auto vertices = List<Vec2>::empty();
+			auto boundaryEdges = List<i32>::empty();
+			auto triangleVertices = List<i32>::empty();
 			auto shapeType = Simulation::ObjectShapeType::CIRCLE;
 			f32 radius = 0.0f;
 
@@ -87,8 +91,11 @@ void MainLoop::update() {
 					const auto triangulation = mapbox::earcut(polygonToTriangulate);
 
 					for (auto& vertex : polygonToTriangulate[0]) {
-						outline.add(vertex);
+						simplifiedOutline.add(vertex);
 					}
+					boundaryEdges = polygon->boundaryEdges.clone();
+					triangleVertices = polygon->trianglesVertices.clone();
+					vertices = polygon->vertices.clone();
 
  					b2BodyDef bodyDef = b2DefaultBodyDef();
 					bodyDef.type = b2_dynamicBody;
@@ -119,7 +126,15 @@ void MainLoop::update() {
 				if (B2_ID_EQUALS(bodyId, b2_nullBodyId)) {
 					CHECK_NOT_REACHED();
 				} else {
-					simulation.objects.add(Simulation::Object{ .id = bodyId, .shapeType = shapeType, .simplifiedOutline = std::move(outline), .radius = radius });
+					simulation.objects.add(Simulation::Object{ 
+						.id = bodyId, 
+						.shapeType = shapeType, 
+						.simplifiedOutline = std::move(simplifiedOutline),
+						.vertices = std::move(vertices),
+						.boundaryEdges = std::move(boundaryEdges),
+						.trianglesVertices = std::move(triangleVertices),
+						.radius = radius 
+					});
 				}
 			}
 		} else if (currentState == State::SIMULATION) {

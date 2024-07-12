@@ -350,44 +350,58 @@ void Simulation::render(GameRenderer& renderer) {
 	for (const auto& object : objects) {
 		const auto position = toVec2(b2Body_GetPosition(object.id));
 		f32 rotation = b2Body_GetAngle(object.id);
-		getShapes(object.id);
-		for (auto& shape : getShapesResult) {
-			auto type = b2Shape_GetType(shape);
-			switch (type) {
-			case b2_circleShape: {
-				const auto circle = b2Shape_GetCircle(shape);
-				renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
-				break;
-			}
-	
-			case b2_polygonShape: {
-				const auto rotate = Rotation(rotation);
-				const auto polygon = b2Shape_GetPolygon(shape);
 
-				auto transform = [&](Vec2 v) -> Vec2 {
-					v *= rotate;
-					v += position;
-					return v;
-				};
+		switch (object.shapeType) {
+			using enum ObjectShapeType;
+		case CIRCLE:
+			renderer.disk(position, object.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
+			break;
 
-				i64 previous = polygon.count - 1;
-				for (i64 i = 0; i < polygon.count; i++) {
-					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
-					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
-					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
-					previous = i;
-				}
-				break;
-			}
-
-			case b2_capsuleShape:
-			case b2_segmentShape:
-			case b2_smoothSegmentShape:
-			case b2_shapeTypeCount:
-				ASSERT_NOT_REACHED();
-				break;
-			}
+		case POLYGON:
+			renderer.polygon(object.vertices, object.boundaryEdges, object.trianglesVertices, position, rotation, Vec4(Color3::WHITE / 2.0f, 0.6f), false);
+			break;
 		}
+		//getShapes(object.id);
+		//for (auto& shape : getShapesResult) {
+		//	auto type = b2Shape_GetType(shape);
+		//	switch (type) {
+		//	case b2_circleShape: {
+		//		const auto circle = b2Shape_GetCircle(shape);
+		//		renderer.disk(position + toVec2(circle.center), circle.radius, rotation, Vec4(Color3::WHITE / 2.0f, 1.0f), false);
+		//		break;
+		//	}
+	
+		//	case b2_polygonShape: {
+		//		renderer.polygon()
+		//		/*
+		//		Debug
+		//		const auto rotate = Rotation(rotation);
+		//		const auto polygon = b2Shape_GetPolygon(shape);
+
+		//		auto transform = [&](Vec2 v) -> Vec2 {
+		//			v *= rotate;
+		//			v += position;
+		//			return v;
+		//		};
+
+		//		i64 previous = polygon.count - 1;
+		//		for (i64 i = 0; i < polygon.count; i++) {
+		//			const auto currentVertex = transform(toVec2(polygon.vertices[i]));
+		//			const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
+		//			renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
+		//			previous = i;
+		//		}*/
+		//		break;
+		//	}
+
+		//	case b2_capsuleShape:
+		//	case b2_segmentShape:
+		//	case b2_smoothSegmentShape:
+		//	case b2_shapeTypeCount:
+		//		ASSERT_NOT_REACHED();
+		//		break;
+		//	}
+		//}
 	}
 
 	for (const auto& object : transparentObjects) {
@@ -399,6 +413,7 @@ void Simulation::render(GameRenderer& renderer) {
 	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
+	renderer.gfx.drawFilledTriangles();
 	glDisable(GL_BLEND);
 }
 

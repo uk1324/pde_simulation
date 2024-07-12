@@ -38,6 +38,11 @@ struct Simulation {
 		b2BodyId id;
 		ObjectShapeType shapeType;
 		List<Vec2> simplifiedOutline;
+
+		List<Vec2> vertices;
+		List<i32> boundaryEdges;
+		List<i32> trianglesVertices;
+
 		f32 radius;
 	};
 	List<Object> objects;

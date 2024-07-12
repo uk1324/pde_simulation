@@ -25,6 +25,8 @@ EditorPolygonShape EditorPolygonShape::make() {
 		.vertices = List<Vec2>::empty(),
 		.trianglesVertices = List<i32>::empty(),
 		.boundaryEdges = List<i32>::empty(),
+		.translation = Vec2(0.0f),
+		.rotation = 0.0f
 	};
 }
 
@@ -55,4 +57,12 @@ void EditorPolygonShape::initializeFromVertices(View<const Vec2> inputVertices) 
 			previous = i;
 		}
 	}
+}
+
+void EditorPolygonShape::cloneFrom(const EditorPolygonShape& other) {
+	vertices = other.vertices.clone();
+	trianglesVertices = other.trianglesVertices.clone();
+	boundaryEdges = other.boundaryEdges.clone();
+	translation = other.translation;
+	rotation = other.rotation;
 }

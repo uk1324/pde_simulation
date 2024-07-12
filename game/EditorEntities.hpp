@@ -22,10 +22,13 @@ struct EditorPolygonShape {
 	static EditorPolygonShape make();
 
 	void initializeFromVertices(View<const Vec2> inputVertices);
+	void cloneFrom(const EditorPolygonShape& other);
 
 	List<Vec2> vertices;
 	List<i32> trianglesVertices;
 	List<i32> boundaryEdges;
+	Vec2 translation;
+	f32 rotation;
 };
 
 using EditorPolygonShapeId = EntityArrayId<EditorPolygonShape>;

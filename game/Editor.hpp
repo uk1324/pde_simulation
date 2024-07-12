@@ -7,8 +7,6 @@
 #include <game/GameInput.hpp>
 #include <game/Gizmo.hpp>
 
-bool isPointInEditorShape(const EditorShape& shape, Vec2 point);
-
 struct Editor {
 	static Editor make();
 
@@ -80,15 +78,19 @@ struct Editor {
 	void fullyDeleteEntity(const EditorEntityId& id);
 	void deleteShape(const EditorShape& shape);
 
-	Vec2 entityGetPosition(const EditorEntityId& id); // TODO: Make a const version of get for entity array then make this const.
+	Vec2 entityGetPosition(const EditorEntityId& id) const;
 	void entitySetPosition(const EditorEntityId& id, Vec2 position);
 	Vec2 shapeGetPosition(const EditorShape& shape) const;
 	void shapeSetPosition(EditorShape& shape, Vec2 position);
+	Vec2 entityGetCenter(const EditorEntityId& id) const;
+	Vec2 shapeGetCenter(const EditorShape& shape) const;
+
 
 	EditorShape cloneShape(const EditorShape& shape);
 
 	Aabb editorShapeAabb(const EditorShape& shape) const;
 	bool isEditorShapeContainedInAabb(const EditorShape& shape, const Aabb& aabb) const;
+	bool isPointInEditorShape(const EditorShape& shape, Vec2 point) const;
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();

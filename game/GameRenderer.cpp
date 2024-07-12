@@ -5,6 +5,7 @@
 #include <gfx2d/Quad2dPt.hpp>
 #include <gfx/ShaderManager.hpp>
 #include <gfx/Instancing.hpp>
+#include <engine/Math/Rotation.hpp>
 #include <engine/Math/Color.hpp>
 
 GameRenderer GameRenderer::make() {
@@ -14,11 +15,12 @@ GameRenderer GameRenderer::make() {
 	auto gridVao = createInstancingVao<GridShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo);
 
 	return GameRenderer{
+		.tempVertices = List<Vec2>::empty(),
 		MOVE(gfx),
 		MOVE(gridVao),
 		.gridShader = MAKE_GENERATED_SHADER(GRID),
 		MOVE(waveVao),
-		.waveShader = MAKE_GENERATED_SHADER(WAVE)
+		.waveShader = MAKE_GENERATED_SHADER(WAVE),
 	};
 }
 
@@ -34,6 +36,23 @@ void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isS
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 	gfx.circleTriangulated(center, radius + 0.01f, outlineWidth(), outlineColor);
 	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), 0.15, outlineColor);
+}
+
+void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected) {
+	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
+
+	tempVertices.clear();
+	for (const auto& vertex : vertices) {
+		tempVertices.add(Rotation(rotation) * vertex + translation);
+	}
+
+	gfx.filledTriangles(constView(tempVertices), constView(trianglesVertices), color);
+
+	for (i64 i = 0; i < boundaryEdges.size(); i += 2) {
+		const auto startIndex = boundaryEdges[i];
+		const auto endIndex = boundaryEdges[i + 1];
+		gfx.lineTriangulated(tempVertices[startIndex], tempVertices[endIndex], outlineWidth(), outlineColor);
+	}
 }
 
 f32 GameRenderer::outlineWidth() const {

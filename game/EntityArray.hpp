@@ -38,7 +38,9 @@ struct EntityArray {
 
 	void update();
 	std::optional<Entity&> get(const EntityArrayId<Entity>& id);
+	std::optional<const Entity&> get(const EntityArrayId<Entity>& id) const;
 	std::optional<Entity&> getEvenIfInactive(const EntityArrayId<Entity>& id);
+	std::optional<const Entity&> getEvenIfInactive(const EntityArrayId<Entity>& id) const;
 	bool isAlive(const EntityArrayId<Entity>& id);
 	//bool isAlive(const Entity& entity);
 	EntityArrayPair<Entity> create();
@@ -153,7 +155,36 @@ std::optional<Entity&> EntityArray<Entity, DefaultInitialize>::get(const EntityA
 }
 
 template<typename Entity, typename DefaultInitialize>
+std::optional<const Entity&> EntityArray<Entity, DefaultInitialize>::get(const EntityArrayId<Entity>& id) const {
+	// TODO: Could use const cast instead of copy and paste.
+	const auto result = getEvenIfInactive(id);
+
+	if (!result.has_value()) {
+		return std::nullopt;
+	}
+
+	if (!entityIsActive[id.index_]) {
+		return std::nullopt;
+	}
+
+	return result;
+}
+
+template<typename Entity, typename DefaultInitialize>
 std::optional<Entity&> EntityArray<Entity, DefaultInitialize>::getEvenIfInactive(const EntityArrayId<Entity>& id) {
+	if (id.index_ >= entities.size()) {
+		ASSERT_NOT_REACHED();
+		return std::nullopt;
+	}
+
+	if (id.version_ != entityVersions[id.index_]) {
+		return std::nullopt;
+	}
+	return entities[id.index_];
+}
+
+template<typename Entity, typename DefaultInitialize>
+std::optional<const Entity&> EntityArray<Entity, DefaultInitialize>::getEvenIfInactive(const EntityArrayId<Entity>& id) const {
 	if (id.index_ >= entities.size()) {
 		ASSERT_NOT_REACHED();
 		return std::nullopt;
