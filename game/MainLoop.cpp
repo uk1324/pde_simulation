@@ -6,6 +6,8 @@
 #include <gfx2d/Quad2dPt.hpp>
 #include "MatrixUtils.hpp"
 #include <engine/Input/Input.hpp>
+#include <engine/Math/DouglassPecker.hpp>
+#include <dependencies/earcut/earcut.hpp>
 
 MainLoop::MainLoop() 
 	: renderer(GameRenderer::make())
@@ -45,6 +47,11 @@ void MainLoop::update() {
 			simulation.camera = editor.camera;
 
 			simulation.reset();
+			b2BodyId bodyId = b2_nullBodyId;;
+			auto outline = List<Vec2>::empty();
+			auto shapeType = Simulation::ObjectShapeType::CIRCLE;
+			f32 radius = 0.0f;
+
 			for (auto body : editor.reflectingBodies) {
 				switch (body->shape.type) {
 					using enum EditorShapeType;
@@ -54,26 +61,65 @@ void MainLoop::update() {
 					bodyDef.type = b2_dynamicBody;
 					bodyDef.position = fromVec2(circle.center);
 					bodyDef.angle = circle.angle;
-					b2BodyId bodyId = b2CreateBody(simulation.world, &bodyDef);
+					bodyId = b2CreateBody(simulation.world, &bodyDef);
 					//b2Polygon dynamicBox = b2MakeBox(0.1f, 10.0f);
 					b2Circle physicsCircle{ .center = b2Vec2(0.0f), .radius = circle.radius };
 
 					b2ShapeDef shapeDef = b2DefaultShapeDef();
 					shapeDef.density = 1.0f;
 					shapeDef.friction = 0.3f;
+					radius = circle.radius;
 
 					b2CreateCircleShape(bodyId, &shapeDef, &physicsCircle);
-					simulation.objects.add(Simulation::Object{ .id = bodyId });
 					break;
 				}
-				case POLYGON:
-					ASSERT_NOT_REACHED();
-					//b2MakePolygon()
-					//b2Polygon
-// 
-					//b2CreatePolygonShape()
-					break;
+				case POLYGON: {
+					shapeType = Simulation::ObjectShapeType::POLYGON;
+					const auto& polygon = editor.polygonShapes.get(body->shape.polygon);
+					if (!polygon.has_value()) {
+						CHECK_NOT_REACHED();
+						break;
+					}
+					// @Performance:
+					auto simplifiedVertices = polygonDouglassPeckerSimplify(constView(polygon->vertices), 0.3f);
+					std::vector <std::vector<Vec2>> polygonToTriangulate;
+					polygonToTriangulate.push_back(std::move(simplifiedVertices));
+					const auto triangulation = mapbox::earcut(polygonToTriangulate);
 
+					for (auto& vertex : polygonToTriangulate[0]) {
+						outline.add(vertex);
+					}
+
+ 					b2BodyDef bodyDef = b2DefaultBodyDef();
+					bodyDef.type = b2_dynamicBody;
+					bodyDef.position = b2Vec2{ 0.0f, 0.0f };
+					bodyDef.angle = 0.0f;
+					bodyId = b2CreateBody(simulation.world, &bodyDef);
+
+					b2ShapeDef shapeDef = b2DefaultShapeDef();
+					shapeDef.density = 1.0f;
+					shapeDef.friction = 0.3f;
+
+					ASSERT(triangulation.size() % 3 == 0);
+					for (i64 i = 0; i < triangulation.size(); i += 3) {
+						b2Hull hull;
+						for (i64 j = 0; j < 3; j++) {
+							const auto index = triangulation[i + j];
+							hull.points[j] = fromVec2(polygonToTriangulate[0][index]);
+						}
+						hull.count = 3;
+						const auto polygon = b2MakePolygon(&hull, 0.0f);
+						b2CreatePolygonShape(bodyId, &shapeDef, &polygon);
+					}
+					break;
+				}
+
+				}
+
+				if (B2_ID_EQUALS(bodyId, b2_nullBodyId)) {
+					CHECK_NOT_REACHED();
+				} else {
+					simulation.objects.add(Simulation::Object{ .id = bodyId, .shapeType = shapeType, .simplifiedOutline = std::move(outline), .radius = radius });
 				}
 			}
 		} else if (currentState == State::SIMULATION) {

@@ -7,8 +7,6 @@
 #include <game/GameInput.hpp>
 #include <game/Gizmo.hpp>
 
-bool isPointInCircle(Vec2 center, f32 radius, Vec2 point);
-
 bool isPointInEditorShape(const EditorShape& shape, Vec2 point);
 
 struct Editor {

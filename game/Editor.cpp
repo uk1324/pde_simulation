@@ -1,6 +1,7 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
 #include <game/Constants.hpp>
+#include <engine/Math/PointInShape.hpp>
 #include <engine/Input/Input.hpp>
 #include <game/Shared.hpp>
 #include <engine/Math/Color.hpp>
@@ -432,6 +433,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
  			renderer.gfx.filledTriangles(constView(polygon->vertices), constView(polygon->trianglesVertices), Color3::WHITE / 2.0f);
 			break;
 		}
+
 		}
 	}
 
@@ -852,14 +854,7 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, b
 	}
 
 
-	if (drawing && drawHeld) {
-		if (vertices.size() == 0) {
-			vertices.add(cursorPos);
-		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
-			vertices.add(cursorPos);
-		}
-	}
-	/*if (vertices.size() > 2 && (drawDown || drawUp) && cursorPos.distanceTo(vertices[0]) < 0.1f) {
+	if (closeCurveDown) {
 		drawing = false;
 		return true;
 	} else if (drawing && drawHeld) {
@@ -868,13 +863,7 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, b
 		} else if (vertices.back().distanceTo(cursorPos) > 0.05f) {
 			vertices.add(cursorPos);
 		}
-	}*/
-
-	if (closeCurveDown) {
-		drawing = false;
-		return true;
 	}
-
 	return false;
 }
 
@@ -903,10 +892,6 @@ bool isPointInEditorShape(const EditorShape& shape, Vec2 point) {
 	}
 	CHECK_NOT_REACHED();
 	return false;
-}
-
-bool isPointInCircle(Vec2 center, f32 radius, Vec2 point) {
-	return center.distanceSquaredTo(point) <= radius * radius;
 }
 
 bool isCircleInsideAabb(Vec2 center, f32 radius, const Aabb& aabb)

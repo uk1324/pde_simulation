@@ -1,5 +1,8 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <engine/Math/ShapeAabb.hpp>
+#include <engine/Math/Rotation.hpp>
+#include <engine/Math/PointInShape.hpp>
 #include <engine/Math/Color.hpp>
 #include <gfx2d/Quad2dPt.hpp>
 #include <engine/Input/Input.hpp>
@@ -186,21 +189,39 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	};
 	{
 		for (const auto& object : objects) {
-			getShapes(object.id);
-			for (auto& shapeId : getShapesResult) {
-				const auto shapeAabb = bShape_GetAABB(shapeId);
+			const auto position = toVec2(b2Body_GetPosition(object.id));
+			const auto rotation = b2Body_GetAngle(object.id);
+			switch (object.shapeType) {
+				using enum ObjectShapeType;
+			case CIRCLE: {
+				const auto shapeAabb = circleAabb(position, object.radius);
 				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
-				/*renderer.gfx.rect(Vec2(shapeGridAabb.min) * Constants::CELL_SIZE, Vec2(shapeGridAabb.max - shapeGridAabb.min) * Constants::CELL_SIZE, 0.05f, Color3::WHITE);*/
-
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
 						const auto cellCenter = calculateCellCenter(xi, yi);
-						if (bShape_TestPoint(shapeId, cellCenter)) {
+						if (isPointInCircle(position, object.radius, cellCenter)) {
 							cellType(xi, yi) = CellType::REFLECTING_WALL;
-							//renderer.gfx.disk(cellCenter, Constants::CELL_SIZE / 2.0f, Color3::BLACK);
 						}
 					}
 				}
+				break;
+			}
+			case POLYGON: {
+				const auto shapeAabb = transformedPolygonAabb(constView(object.simplifiedOutline), position, rotation);
+				const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize);
+				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
+					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
+						auto cellCenter = calculateCellCenter(xi, yi);
+						cellCenter -= position;
+						cellCenter *= Rotation(-rotation);
+						if (isPointInPolygon(constView(object.simplifiedOutline), cellCenter)) {
+							cellType(xi, yi) = CellType::REFLECTING_WALL;
+						}
+					}
+				}
+				break;
+			}
+
 			}
 		}
 	}
@@ -217,9 +238,9 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 				for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
 					for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
 						const auto cellCenter = calculateCellCenter(xi, yi);
-						if (bShape_TestPoint(shapeId, cellCenter)) {
+						/*if (bShape_TestPoint(shapeId, cellCenter)) {
 							speedSquared(xi, yi) = pow(defaultSpeed * 0.4, 2.0f);
-						}
+						}*/
 					}
 				}
 			}
@@ -339,9 +360,28 @@ void Simulation::render(GameRenderer& renderer) {
 				break;
 			}
 	
+			case b2_polygonShape: {
+				const auto rotate = Rotation(rotation);
+				const auto polygon = b2Shape_GetPolygon(shape);
+
+				auto transform = [&](Vec2 v) -> Vec2 {
+					v *= rotate;
+					v += position;
+					return v;
+				};
+
+				i64 previous = polygon.count - 1;
+				for (i64 i = 0; i < polygon.count; i++) {
+					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
+					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
+					renderer.gfx.line(previousVertex, currentVertex, GameRenderer::outlineWidth / 5.0f, Color3::WHITE / 2.0f);
+					previous = i;
+				}
+				break;
+			}
+
 			case b2_capsuleShape:
 			case b2_segmentShape:
-			case b2_polygonShape:
 			case b2_smoothSegmentShape:
 			case b2_shapeTypeCount:
 				ASSERT_NOT_REACHED();

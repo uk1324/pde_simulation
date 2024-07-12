@@ -29,8 +29,16 @@ struct Simulation {
 
 	b2WorldId world;
 
+	enum class ObjectShapeType {
+		CIRCLE,
+		POLYGON,
+	};
+
 	struct Object {
 		b2BodyId id;
+		ObjectShapeType shapeType;
+		List<Vec2> simplifiedOutline;
+		f32 radius;
 	};
 	List<Object> objects;
 	struct TransparentObject {
