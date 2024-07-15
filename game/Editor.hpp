@@ -2,6 +2,7 @@
 
 #include <engine/Math/Aabb.hpp>
 #include <variant>
+#include <game/SimulationSettings.hpp>
 #include <game/EditorActions.hpp>
 #include <game/GameRenderer.hpp>
 #include <game/GameInput.hpp>
@@ -70,6 +71,8 @@ struct Editor {
 	} selectTool;
 
 	Aabb roomBounds;
+
+	SimulationSettings simulationSettings;
 
 	std::unordered_set<EditorEntityId> selectedEntities;
 	Vec2 selectedEntitiesCenter();

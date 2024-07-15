@@ -1,0 +1,28 @@
+There are 2 versions of the wave equation with variable speed.
+1. Dtt u = c(x)^2 div grad u = c(x)^2 (Dxx u + Dyy u)
+2. Dtt u = div (c(x)^2 grad u)
+
+The first one is used for example in maxwells equation and the second one is used for surface water waves. https://www.sciencedirect.com/science/article/abs/pii/S0165212510000338
+
+Discretizing Dxx u + Dyy u, assuming dx = dy
+Dxx u + Dyy u =
+(u(x + dl, y, 0) - 2u(x, y, 0) + u(x - dl, y, 0)) / dl^2 + (u(x, y + dl, 0) - 2u(x, y, 0) + u(x, y - dl, 0)) / dl^2 =
+(u(x + dl, y, 0) + u(x - dl, y, 0) + (u(x, y + dl, 0) + u(x, y - dl, 0) - 4u(x, y, 0)) / dl^2
+
+Could use an implicit method for the rhs. If 1. is used then you could calculate the inverse of the matrix once and reuse it. This wouldn't work for 2., because it has varying speed inside the operator.
+
+For the time discretization I will use forward euler twice. I am not using a central difference approximation even though it has less error, because it requires values from the past frame. This might cause issues when the boundary conditions change between frames.
+
+Absorbing boundary conditions
+https://youtu.be/pN-gi_omIVE?si=KdZUj1QB82Eqz_6_&t=2387
+
+D_n is the derivative in the normal direction
+D_n u + 1/c D_t u = 0
+D_t u = -c D_n u
+
+Damping
+v' = cv => v = e^ct
+if the value should be scaled by d every second then
+e^c(t + 1) = e^ct * e^c
+e^c = d => c = ln(d)
+So each frame mulitiply by exp(ln(d) * dt)

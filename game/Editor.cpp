@@ -41,6 +41,7 @@ Editor Editor::make() {
 		.polygonTool = PolygonTool::make(),
 		.gizmoSelectedShapesAtGrabStart = List<EditorShape>::empty(),
 		.roomBounds = Constants::gridBounds(Constants::DEFAULT_GRID_SIZE),
+		.simulationSettings = SimulationSettings::makeDefault(),
 		.actions = EditorActions::make(),
 		.polygonShapes = decltype(polygonShapes)::make(),
 		.rigidBodies = decltype(rigidBodies)::make(),
@@ -288,6 +289,7 @@ void Editor::gui() {
 		ImGuiDockNodeFlags_NoDockingOverCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
 
 	const auto settingsWindowName = "settings";
+	const auto simulationSettingsWindowName = "simulation";
 	if (firstFrame) {
 		ImGui::DockBuilderRemoveNode(id);
 		ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
@@ -296,11 +298,12 @@ void Editor::gui() {
 		ImGui::DockBuilderSetNodeSize(leftId, ImVec2(300.0f, 1.0f));
 
 		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
+		ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
 
 		ImGui::DockBuilderFinish(id);
-		firstFrame = false;
-	}
 
+		ImGui::SetWindowFocus(settingsWindowName);
+	}
 	bool openHelpWindow = false;
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("project")) {
@@ -362,7 +365,91 @@ void Editor::gui() {
 	}
 	ImGui::End();
 
+	auto boundaryConditionCombo = [](const char* text, SimulationBoundaryCondition& value) {
+		struct Entry {
+			SimulationBoundaryCondition type;
+			// Could add tooltip.
+		};
+
+		auto boundaryConditionName = [](SimulationBoundaryCondition s) {
+			switch (s) {
+				using enum SimulationBoundaryCondition;
+			case REFLECTING: return "reflecting";
+			case ABSORBING: return "absorbing";
+			}
+		};
+
+		Entry entries[]{
+			{ SimulationBoundaryCondition::REFLECTING },
+			{ SimulationBoundaryCondition::ABSORBING }
+		};
+		const char* preview = boundaryConditionName(value);
+
+		Gui::leafNodeBegin(text);
+		if (ImGui::BeginCombo(Gui::prependWithHashHash(text), preview)) {
+			for (auto& entry : entries) {
+				const auto isSelected = entry.type == value;
+				if (ImGui::Selectable(boundaryConditionName(entry.type), isSelected)) {
+					value = entry.type;
+				}
+
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+
+			}
+			ImGui::EndCombo();
+		}
+	};
+	ImGui::Begin(simulationSettingsWindowName);
+	{
+		if (Gui::beginPropertyEditor(Gui::PropertyEditorFlags::TableAdjustable)) {
+			Gui::inputI32("wave simulation substeps", simulationSettings.waveEquationSimulationSubStepCount);
+			simulationSettings.waveEquationSimulationSubStepCount = std::clamp(simulationSettings.waveEquationSimulationSubStepCount, 1, 20);
+
+			Gui::inputI32("rigidbody simulation substeps", simulationSettings.rigidbodySimulationSubStepCount);
+			simulationSettings.rigidbodySimulationSubStepCount = std::clamp(simulationSettings.rigidbodySimulationSubStepCount, 1, 20);
+
+			// TODO: undo redo
+			Gui::sliderFloat("time scale", simulationSettings.timeScale, 0.0f, 1.0f);
+			simulationSettings.timeScale = std::clamp(simulationSettings.timeScale, 0.0f, 1.0f);
+
+			Gui::checkbox("damping", simulationSettings.dampingEnabled);
+			if (simulationSettings.dampingEnabled) {
+				Gui::inputFloat("damping per second", simulationSettings.dampingPerSecond);
+				simulationSettings.dampingPerSecond = std::clamp(simulationSettings.dampingPerSecond, 0.0f, 1.0f);
+			}
+
+			Gui::checkbox("speed damping per second", simulationSettings.speedDampingEnabled);
+			if (simulationSettings.speedDampingEnabled) {
+				Gui::inputFloat("", simulationSettings.speedDampingPerSecond);
+				simulationSettings.speedDampingPerSecond = std::clamp(simulationSettings.speedDampingPerSecond, 0.0f, 1.0f);
+			}
+
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
+
+		ImGui::SeparatorText("boundary conditions");
+		if (Gui::beginPropertyEditor()) {
+			boundaryConditionCombo("top", simulationSettings.topBoundaryCondition);
+			boundaryConditionCombo("bottom", simulationSettings.bottomBoundaryCondition);
+			boundaryConditionCombo("left", simulationSettings.leftBoundaryCondition);
+			boundaryConditionCombo("right", simulationSettings.rightBoundaryCondition);
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
+
+
+	}
+	ImGui::End();
+
 	polygonTool.invalidShapeModalGui();
+
+	if (firstFrame) {
+		ImGui::SetWindowFocus(settingsWindowName);
+		firstFrame = false;
+	}
 }
 
 void Editor::selectToolGui() {

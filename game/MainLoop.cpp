@@ -46,6 +46,7 @@ void MainLoop::update() {
 			currentState = State::SIMULATION;
 			simulation.camera = editor.camera;
 			simulation.reset();
+			simulation.simulationSettings = editor.simulationSettings;
 
 			for (auto body : editor.rigidBodies) {
 

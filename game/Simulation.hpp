@@ -5,6 +5,7 @@
 #include <game/GameInput.hpp>
 #include <game/Box2d.hpp>
 #include <game/GameRenderer.hpp>
+#include <game/SimulationSettings.hpp>
 
 enum class CellType : u8 {
 	EMPTY,
@@ -64,6 +65,8 @@ struct Simulation {
 	b2BodyId mouseJointBody0;
 
 	Camera camera;
+
+	SimulationSettings simulationSettings;
 
 	Array2d<f32> u;
 	Array2d<f32> u_t;

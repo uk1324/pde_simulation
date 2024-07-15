@@ -18,6 +18,7 @@
 
 Simulation::Simulation()
 	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
+	, simulationSettings(SimulationSettings::makeDefault())
 	, u(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, u_t(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, speedSquared(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
@@ -30,7 +31,7 @@ Simulation::Simulation()
 	, getShapesResult(List<b2ShapeId>::empty())
 	, dt(1.0f / 60.0f) {
 
-	for (i64 yi = 0; yi < simulationGridSize.y; yi++) {
+	/*for (i64 yi = 0; yi < simulationGridSize.y; yi++) {
 		cellType(0, yi) = CellType::REFLECTING_WALL;
 		cellType(simulationGridSize.x - 1, yi) = CellType::REFLECTING_WALL;
 	}
@@ -38,7 +39,7 @@ Simulation::Simulation()
 	for (i64 xi = 1; xi < simulationGridSize.x - 1; xi++) {
 		cellType(xi, 0) = CellType::REFLECTING_WALL;
 		cellType(xi, simulationGridSize.y - 1) = CellType::REFLECTING_WALL;
-	}
+	}*/
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -89,11 +90,9 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	
 	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
 	
+	const auto deltaTime = dt * simulationSettings.timeScale;
 
-	{
-		i32 subStepCount = 4;
-		b2World_Step(world, dt, subStepCount);
-	}
+	b2World_Step(world, deltaTime, simulationSettings.rigidbodySimulationSubStepCount);
 
 	fill(cellType, CellType::EMPTY);
 
@@ -151,31 +150,36 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		}
 	}
 
-	/*for (i64 i = 0; i < 4; i++) {
-		waveSimulationUpdate(dt / 4.0f);
-	}*/
-	waveSimulationUpdate(dt);
+	for (i64 i = 0; i < simulationSettings.waveEquationSimulationSubStepCount; i++) {
+		waveSimulationUpdate(deltaTime / simulationSettings.waveEquationSimulationSubStepCount);
+	}
 
 	render(renderer);
 }
 
-/*
-There are 2 versions of the wave equation with variable speed.
-1. Dtt u = c(x)^2 div grad u = c(x)^2 (Dxx u + Dyy u)
-2. Dtt u = div (c(x)^2 grad u)
-
-The first one is used for example in maxwells equation and the second one is used for surface water waves. https://www.sciencedirect.com/science/article/abs/pii/S0165212510000338
-
-Discretizing Dxx u + Dyy u, assuming dx = dy
-Dxx u + Dyy u =
-(u(x + dl, y, 0) - 2u(x, y, 0) + u(x - dl, y, 0)) / dl^2 + (u(x, y + dl, 0) - 2u(x, y, 0) + u(x, y - dl, 0)) / dl^2 =
-(u(x + dl, y, 0) + u(x - dl, y, 0) + (u(x, y + dl, 0) + u(x, y - dl, 0) - 4u(x, y, 0)) / dl^2
-
-Could use an implicit method for the rhs. If 1. is used then you could calculate the inverse of the matrix once and reuse it. This wouldn't work for 2., because it has varying speed inside the operator.
-
-For the time discretization I will use forward euler twice. I am not using a central difference approximation even though it has less error, because it requires values from the past frame. This might cause issues when the boundary conditions change between frames.
-*/
 void Simulation::waveSimulationUpdate(f32 deltaTime) {
+
+	if (simulationSettings.topBoundaryCondition == SimulationBoundaryCondition::REFLECTING) {
+		for (i64 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			cellType(xi, simulationGridSize.y - 1) = CellType::REFLECTING_WALL;
+		}
+	}
+	if (simulationSettings.bottomBoundaryCondition == SimulationBoundaryCondition::REFLECTING) {
+		for (i64 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			cellType(xi, 0) = CellType::REFLECTING_WALL;
+		}
+	}
+	if (simulationSettings.leftBoundaryCondition == SimulationBoundaryCondition::REFLECTING) {
+		for (i64 yi = 0; yi < simulationGridSize.y; yi++) {
+			cellType(0, yi) = CellType::REFLECTING_WALL;
+		}
+	}
+	if (simulationSettings.rightBoundaryCondition == SimulationBoundaryCondition::REFLECTING) {
+		for (i64 yi = 0; yi < simulationGridSize.y; yi++) {
+			cellType(simulationGridSize.x - 1, yi) = CellType::REFLECTING_WALL;
+		}
+	}
+	
 	for (i32 yi = 0; yi < simulationGridSize.y; yi++) {
 		for (i32 xi = 0; xi < simulationGridSize.x; xi++) {
 			switch (cellType(xi, yi)) {
@@ -196,33 +200,58 @@ void Simulation::waveSimulationUpdate(f32 deltaTime) {
 
 			const auto laplacianU = (u(xi + 1, yi) + u(xi - 1, yi) + u(xi, yi + 1) + u(xi, yi - 1) - 4.0f * u(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);
 
-			/*const auto laplacianU = (
-				u(xi + 1, yi) * speedSquared(xi + 1, yi) + 
-				u(xi - 1, yi) * speedSquared(xi - 1, yi) + 
-				u(xi, yi + 1) * speedSquared(xi, yi + 1) + 
-				u(xi, yi - 1) * speedSquared(xi, yi - 1) - 
-				4.0f * u(xi, yi) * speedSquared(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);*/
-			/*const auto laplacianU = (
-				u(xi + 1, yi) * speedSquared(xi + 1, yi) +
-				u(xi - 1, yi) * speedSquared(xi - 1, yi) +
-				u(xi, yi + 1) * speedSquared(xi, yi + 1) +
-				u(xi, yi - 1) * speedSquared(xi, yi - 1) -
-				4.0f * u(xi, yi) * speedSquared(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);*/
-
 			u_t(xi, yi) += laplacianU * speedSquared(xi, yi) * deltaTime;
 		}
 	}
 
+#define CALCULATE_U_T(xPos, yPos, normalDifference) \
+	u_t(xPos, yPos) = sqrt(speedSquared(xPos, yPos)) * ((normalDifference) / Constants::CELL_SIZE)
+	
+	if (simulationSettings.bottomBoundaryCondition == SimulationBoundaryCondition::ABSORBING) {
+		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			CALCULATE_U_T(xi, 1, u(xi, 2) - u(xi, 1));
+		}
+	}
+
+	if (simulationSettings.topBoundaryCondition == SimulationBoundaryCondition::ABSORBING) {
+		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			CALCULATE_U_T(xi, simulationGridSize.y - 2, u(xi, simulationGridSize.y - 3) - u(xi, simulationGridSize.y - 2));
+		}
+	}
+
+	if (simulationSettings.leftBoundaryCondition == SimulationBoundaryCondition::ABSORBING) {
+		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
+			CALCULATE_U_T(1, yi, u(2, yi) - u(1, yi));
+		}
+	}
+
+	if (simulationSettings.rightBoundaryCondition == SimulationBoundaryCondition::ABSORBING) {
+		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
+			CALCULATE_U_T(simulationGridSize.x - 2, yi, u(simulationGridSize.x - 3, yi) - u(simulationGridSize.x - 2, yi));
+		}
+	}
+#undef CALCULATE_U_T
 	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
 			u(xi, yi) += deltaTime * u_t(xi, yi);
 		}
 	}
-	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
-		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
-			//u_t(xi, yi) *= 0.9f;
-			u_t(xi, yi) *= 0.99f;
-			//u_t(xi, yi) *= 0.999f;
+
+	if (simulationSettings.dampingEnabled) {
+		const auto scale = exp(deltaTime * log(simulationSettings.dampingPerSecond));
+		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
+			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+				u(xi, yi) *= scale;
+			}
+		}
+	}
+
+	if (simulationSettings.speedDampingEnabled) {
+		const auto scale = exp(deltaTime * log(simulationSettings.speedDampingPerSecond));
+		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
+			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+				u_t(xi, yi) *= scale;
+			}
 		}
 	}
 }
