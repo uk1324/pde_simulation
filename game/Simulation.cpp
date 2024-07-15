@@ -1,5 +1,6 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <imgui/imgui.h>
 #include <engine/Math/ShapeAabb.hpp>
 #include <engine/Math/Rotation.hpp>
 #include <engine/Math/PointInShape.hpp>
@@ -11,6 +12,7 @@
 #include <game/GridUtils.hpp>
 #include <game/Array2dDrawingUtils.hpp>
 #include <game/Shaders/waveData.hpp>
+#include <game/Shaders/waveDisplayData.hpp>
 #include <gfx/Instancing.hpp>
 #include <game/Shared.hpp>
 #include <glad/glad.h>
@@ -23,8 +25,11 @@ Simulation::Simulation()
 	, u_t(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, speedSquared(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
 	, cellType(Array2d<CellType>::filled(simulationGridSize.x, simulationGridSize.y, CellType::EMPTY))
-	, displayGrid(Array2d<Pixel32>::filled(simulationGridSize.x - 2, simulationGridSize.y - 2, Pixel32(0, 0, 0))) 
-	, displayTexture(makePixelTexture(displayGrid.sizeX(), displayGrid.sizeY()))
+	, debugDisplayGrid(Array2d<Pixel32>::filled(simulationGridSize.x - 2, simulationGridSize.y - 2, Pixel32(0, 0, 0))) 
+	, debugDisplayTexture(makePixelTexture(debugDisplayGrid.sizeX(), debugDisplayGrid.sizeY()))
+	, displayGrid(Array2d<f32>::filled(simulationGridSize.x - 2, simulationGridSize.y - 2, 0.0f))
+	, displayGridTemp(Array2d<f32>::filled(simulationGridSize.x - 2, simulationGridSize.y - 2, 0.0f))
+	, displayTexture(makeFloatTexture(debugDisplayGrid.sizeX(), debugDisplayGrid.sizeY()))
 	, reflectingObjects(List<ReflectingObject>::empty())
 	, transmissiveObjects(List<TransmissiveObject>::empty())
 	, mouseJoint(b2_nullJointId)
@@ -266,13 +271,13 @@ void Simulation::render(GameRenderer& renderer) {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	renderer.drawGrid();
-	{
-		for (i32 displayYi = 0; displayYi < displayGrid.sizeY(); displayYi++) {
-			for (i32 displayXi = 0; displayXi < displayGrid.sizeX(); displayXi++) {
+	if (debugDisplay) {
+		for (i32 displayYi = 0; displayYi < debugDisplayGrid.sizeY(); displayYi++) {
+			for (i32 displayXi = 0; displayXi < debugDisplayGrid.sizeX(); displayXi++) {
 				const auto simulationXi = displayXi + 1;
 				const auto simulationYi = displayYi + 1;
 
-				auto& pixel = displayGrid(displayXi, displayYi);
+				auto& pixel = debugDisplayGrid(displayXi, displayYi);
 				switch (cellType(simulationXi, simulationYi)) {
 				case CellType::EMPTY: {
 					// could smooth out the values before displaying
@@ -287,7 +292,7 @@ void Simulation::render(GameRenderer& renderer) {
 				}
 			}
 		}
-		updatePixelTexture(displayGrid.data(), displayGrid.sizeX(), displayGrid.sizeY());
+		updatePixelTexture(debugDisplayGrid.data(), debugDisplayGrid.sizeX(), debugDisplayGrid.sizeY());
 
 		const auto displayGridBounds = this->displayGridBounds();
 		const auto displayGridBoundsSize = displayGridBounds.size();
@@ -295,9 +300,73 @@ void Simulation::render(GameRenderer& renderer) {
 		const WaveInstance display{
 			.transform = camera.makeTransform(displayGridBounds.center(), 0.0f, displayGridBounds.size() / 2.0f)
 		};
-		//camera.changeSizeToFitBox(displayGridBoundsSize);
-		renderer.waveShader.setTexture("waveTexture", 0, displayTexture);
+		renderer.waveShader.setTexture("waveTexture", 0, debugDisplayTexture);
 		drawInstances(renderer.waveVao, renderer.gfx.instancesVbo, View<const WaveInstance>(&display, 1), quad2dPtDrawInstances);
+	} else {
+		for (i32 displayYi = 0; displayYi < debugDisplayGrid.sizeY(); displayYi++) {
+			for (i32 displayXi = 0; displayXi < debugDisplayGrid.sizeX(); displayXi++) {
+				const auto simulationXi = displayXi + 1;
+				const auto simulationYi = displayYi + 1;
+				const auto min = -5.0f;
+				const auto max = 5.0f;
+				displayGridTemp(displayXi, displayYi) = (u(simulationXi, simulationYi) - min) / (max - min);
+			}
+		}
+
+		//ImGui::Checkbox("applyBlurToDisplayGrid", &applyBlurToDisplayGrid);
+
+		if (applyBlurToDisplayGrid) {
+			for (i32 displayYi = 0; displayYi < debugDisplayGrid.sizeY(); displayYi++) {
+				for (i32 displayXi = 0; displayXi < debugDisplayGrid.sizeX(); displayXi++) {
+					f32 sum = 0.0f;
+					f32 kernel[3][3] = {
+						{ 1.0f / 16.0f, 2.0f / 16.0f, 1.0f / 16.0f },
+						{ 2.0f / 16.0f, 4.0f / 16.0f, 2.0f / 16.0f },
+						{ 1.0f / 16.0f, 2.0f / 16.0f, 1.0f / 16.0f },
+					};
+
+					for (i64 j = 0; j < 3; j++) {
+						for (i64 i = 0; i < 3; i++) {
+							i64 x = displayXi + (i - 1);
+							i64 y = displayYi + (j - 1);
+
+							if (x < 0) {
+								x = 0;
+							}
+							if (y < 0) {
+								y = 0;
+							}
+							if (x >= displayGrid.sizeX()) {
+								x = displayGrid.sizeX() - 1;
+							}
+							if (y >= displayGrid.sizeY()) {
+								y = displayGrid.sizeY() - 1;
+							}
+
+							sum += displayGridTemp(x, y) * kernel[i][j];
+						}
+					}
+					displayGrid(displayXi, displayYi) = sum;
+				}
+			}
+		} else {
+			for (i32 displayYi = 0; displayYi < debugDisplayGrid.sizeY(); displayYi++) {
+				for (i32 displayXi = 0; displayXi < debugDisplayGrid.sizeX(); displayXi++) {
+					displayGrid(displayXi, displayYi) = displayGridTemp(displayXi, displayYi);
+				}
+			}
+		}
+
+		updateFloatTexture(displayGrid.data(), displayGrid.sizeX(), displayGrid.sizeY());
+
+		const auto displayGridBounds = this->displayGridBounds();
+		const auto displayGridBoundsSize = displayGridBounds.size();
+		renderer.waveDisplayShader.use();
+		const WaveDisplayInstance display{
+			.transform = camera.makeTransform(displayGridBounds.center(), 0.0f, displayGridBounds.size() / 2.0f)
+		};
+		renderer.waveDisplayShader.setTexture("waveTexture", 0, displayTexture);
+		drawInstances(renderer.waveVao, renderer.gfx.instancesVbo, View<const WaveDisplayInstance>(&display, 1), quad2dPtDrawInstances);
 	}
 
 	renderer.drawBounds(displayGridBounds());
@@ -350,7 +419,7 @@ void Simulation::reset() {
 }
 
 Aabb Simulation::displayGridBounds() const {
-	return Constants::gridBounds(displayGrid.size());
+	return Constants::gridBounds(debugDisplayGrid.size());
 }
 
 Aabb Simulation::simulationGridBounds() const {

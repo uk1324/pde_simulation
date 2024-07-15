@@ -1,6 +1,7 @@
 #include "GameRenderer.hpp"
 #include <game/Shaders/waveData.hpp>
 #include <game/Shaders/gridData.hpp>
+#include <game/Shaders/waveDisplayData.hpp>
 #include <StructUtils.hpp>
 #include <gfx2d/Quad2dPt.hpp>
 #include <gfx/ShaderManager.hpp>
@@ -14,6 +15,8 @@ GameRenderer GameRenderer::make() {
 
 	auto gridVao = createInstancingVao<GridShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo);
 
+	auto waveDisplayVao = createInstancingVao<WaveDisplayShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo);
+
 	return GameRenderer{
 		.tempVertices = List<Vec2>::empty(),
 		MOVE(gfx),
@@ -21,6 +24,8 @@ GameRenderer GameRenderer::make() {
 		.gridShader = MAKE_GENERATED_SHADER(GRID),
 		MOVE(waveVao),
 		.waveShader = MAKE_GENERATED_SHADER(WAVE),
+		MOVE(waveDisplayVao),
+		.waveDisplayShader = MAKE_GENERATED_SHADER(WAVE_DISPLAY)
 	};
 }
 

@@ -29,4 +29,7 @@ struct GameRenderer {
 
 	Vao waveVao;
 	ShaderProgram& waveShader;
+
+	Vao waveDisplayVao;
+	ShaderProgram& waveDisplayShader;
 };

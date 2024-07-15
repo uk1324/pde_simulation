@@ -30,6 +30,8 @@ struct Simulation {
 
 	b2WorldId world;
 
+	bool debugDisplay = false;
+
 	enum class ShapeType {
 		CIRCLE,
 		POLYGON,
@@ -73,6 +75,11 @@ struct Simulation {
 	Array2d<CellType> cellType;
 	Array2d<f32> speedSquared;
 
-	Array2d<Pixel32> displayGrid;
+	Array2d<Pixel32> debugDisplayGrid;
+	Texture debugDisplayTexture;
+
+	Array2d<f32> displayGrid;
+	Array2d<f32> displayGridTemp;
+	bool applyBlurToDisplayGrid = true;
 	Texture displayTexture;
 };
