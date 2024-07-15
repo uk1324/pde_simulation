@@ -13,29 +13,6 @@
 #include <imgui/imgui_internal.h>
 #include <glad/glad.h>
 
-EditorShape::EditorShape(const EditorCircleShape& circle)
-	: circle(circle)
-	, type(EditorShapeType::CIRCLE) {}
-
-EditorShape::EditorShape(const EditorPolygonShapeId& polygon)
-	: polygon(polygon)
-	, type(EditorShapeType::POLYGON) {}
-
-bool EditorShape::operator==(const EditorShape& other) const {
-	if (other.type != type) {
-		return false;
-	}
-
-	switch (type) {
-		using enum EditorShapeType;
-	case CIRCLE: return circle == other.circle;
-	case POLYGON: return polygon == other.polygon;
-	}
-
-	CHECK_NOT_REACHED();
-	return false;
-}
-
 Editor Editor::make() {
 	Editor editor{
 		.polygonTool = PolygonTool::make(),
@@ -171,10 +148,10 @@ void Editor::selectToolUpdate(const GameInput& input) {
 						CHECK_NOT_REACHED();
 						continue;
 					}
-					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material);
+					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material, body->isStatic);
 					auto newShape = cloneShape(old.shape);
 					shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
-					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorRigidBody(newShape, body->material))));
+					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
 					break;
 
 				}
@@ -354,11 +331,11 @@ void Editor::gui() {
 			break;
 
 		case POLYGON:
-			materialSettingGui();
+			rigidBodyGui();
 			break;
 
 		case CIRCLE:
-			materialSettingGui();
+			rigidBodyGui();
 			break;
 		}
 
@@ -453,7 +430,10 @@ void Editor::gui() {
 }
 
 void Editor::selectToolGui() {
-	ImGui::SeparatorText("selection");
+	ImGui::NewLine();
+	ImGui::Text("selection");
+	ImGui::Separator();
+	//ImGui::SeparatorText("selection");
 	if (selectedEntities.size() == 0) {
 		ImGui::TextWrapped("no entities selected");
 	} else if (selectedEntities.size() == 1) {
@@ -465,31 +445,45 @@ void Editor::selectToolGui() {
 }
 
 void Editor::entityGui(EditorEntityId id) {
-	if (Gui::beginPropertyEditor()) {
-		switch (id.type) {
-			using enum EditorEntityType;
+	
+	switch (id.type) {
+		using enum EditorEntityType;
 
-		case RIGID_BODY: {
-			auto body = rigidBodies.get(id.reflectingBody());
-			if (!body.has_value()) {
-				CHECK_NOT_REACHED();
-				break;
-			}
-			// @Performance:
-			auto old = *body;
-			ImGui::TextWrapped("shape");
+	case RIGID_BODY: {
+		auto body = rigidBodies.get(id.reflectingBody());
+		if (!body.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		// @Performance:
+		auto old = *body;
+
+		ImGui::SeparatorText("rigid body");
+
+		if (Gui::beginPropertyEditor()) {
+			Gui::checkbox("is static", body->isStatic);
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
+
+		//ImGui::SeparatorText("material");
+		// TODO: What to do when switched into a material type that has additional data. Default initialize?
+
+
+		ImGui::SeparatorText("shape");
+		if (Gui::beginPropertyEditor()) {
 			shapeGui(body->shape);
-			// @Performance: could make the gui return if modified and only then add.
-			if (old != *body) {
-				actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.reflectingBody(), old, *body)));
-			}
+			Gui::endPropertyEditor();
 		}
+		Gui::popPropertyEditor();
 
+		// @Performance: could make the gui return if modified and only then add.
+		if (old != *body) {
+			actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.reflectingBody(), old, *body)));
 		}
-
-		Gui::endPropertyEditor();
 	}
-	Gui::popPropertyEditor();
+
+	}
 }
 
 void Editor::shapeGui(EditorShape& shape) {
@@ -533,7 +527,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 			using enum EditorShapeType;
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
-			renderer.disk(circle.center, circle.radius, circle.angle, color, isSelected);
+			renderer.disk(circle.center, circle.radius, circle.angle, color, isSelected, body->isStatic);
 			break;
 		}
 
@@ -543,7 +537,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				CHECK_NOT_REACHED();
 				break;
 			}
-			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected);
+			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected, body->isStatic);
 			break;
 		}
 
@@ -556,7 +550,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		using enum ToolType;
 
 	case CIRCLE:
-		circleTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor));
+		circleTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
 		break;
 
@@ -780,6 +774,16 @@ Vec2 Editor::selectedEntitiesCenter() {
 	center /= selectedEntities.size();
 
 	return center;
+}
+
+void Editor::rigidBodyGui() {
+	ImGui::SeparatorText("rigid body");
+	if (Gui::beginPropertyEditor()) {
+		Gui::checkbox("is static", isStaticSetting);
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+	materialSettingGui();
 }
 
 void Editor::destoryEntity(const EditorEntityId& id) {
@@ -1038,28 +1042,21 @@ EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	return shape;
 }
 
-EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material) {
+EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {
 	auto body = rigidBodies.create();
 	body->shape = shape;
 	body->material = material;
+	body->isStatic = isStatic;
 	return body;
 }
 
 void Editor::createObject(EditorShape&& shape) {	
- 	auto body = createRigidBody(shape, materialSetting());
+ 	auto body = createRigidBody(shape, materialSetting(), isStaticSetting);
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
 	actions.add(*this, EditorAction(std::move(action)));
 }
 
 bool Editor::firstFrame = true;
-
-EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
-	return EditorPolygonShape::make();
-}
-
-EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
-	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting());
-}
 
 std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
 	if (cursorRightDown) {
@@ -1081,9 +1078,9 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 	return result;
 }
 
-void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color) {
+void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
 	if (center.has_value()) {
-		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, false);
+		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, false, isStaticSetting);
 	}
 }
 

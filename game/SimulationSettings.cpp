@@ -9,9 +9,9 @@ SimulationSettings SimulationSettings::makeDefault() {
 		.bottomBoundaryCondition = SimulationBoundaryCondition::REFLECTING,
 		.leftBoundaryCondition = SimulationBoundaryCondition::REFLECTING,
 		.rightBoundaryCondition = SimulationBoundaryCondition::REFLECTING,
-		.dampingEnabled = false,
-		.dampingPerSecond = 0.95f,
-		.speedDampingEnabled = false,
-		.speedDampingPerSecond = 0.95f,
+		.dampingEnabled = true,
+		.dampingPerSecond = 0.90f,
+		.speedDampingEnabled = false, 
+		.speedDampingPerSecond = 0.90f,
 	};
 }

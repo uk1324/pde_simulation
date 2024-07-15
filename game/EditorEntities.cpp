@@ -16,9 +16,41 @@ EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
 	, radius(radius)
 	, angle(angle) {}
 
-EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial& material)
+EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic)
 	: shape(shape) 
-	, material(material) {}
+	, material(material)
+	, isStatic(isStatic) {}
+
+EditorShape::EditorShape(const EditorCircleShape& circle)
+	: circle(circle)
+	, type(EditorShapeType::CIRCLE) {}
+
+EditorShape::EditorShape(const EditorPolygonShapeId& polygon)
+	: polygon(polygon)
+	, type(EditorShapeType::POLYGON) {}
+
+bool EditorShape::operator==(const EditorShape& other) const {
+	if (other.type != type) {
+		return false;
+	}
+
+	switch (type) {
+		using enum EditorShapeType;
+	case CIRCLE: return circle == other.circle;
+	case POLYGON: return polygon == other.polygon;
+	}
+
+	CHECK_NOT_REACHED();
+	return false;
+}
+
+EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
+	return EditorPolygonShape::make();
+}
+
+EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
+	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting(), false);
+}
 
 EditorPolygonShape EditorPolygonShape::make() {
 	return EditorPolygonShape{

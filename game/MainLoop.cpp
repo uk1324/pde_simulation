@@ -51,7 +51,8 @@ void MainLoop::update() {
 			for (auto body : editor.rigidBodies) {
 
 				b2BodyDef bodyDef = b2DefaultBodyDef();
-				bodyDef.type = b2_dynamicBody;
+				
+				bodyDef.type = body->isStatic ? b2_staticBody : b2_dynamicBody;
 				b2BodyId bodyId = b2CreateBody(simulation.world, &bodyDef);
 
 				b2ShapeDef shapeDef = b2DefaultShapeDef();

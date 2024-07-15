@@ -375,15 +375,16 @@ void Simulation::render(GameRenderer& renderer) {
 		const auto color = Vec4(GameRenderer::defaultColor, isTransmissive ? GameRenderer::transimittingShapeTransparency : 1.0f);
 		const auto position = toVec2(b2Body_GetPosition(id));
 		f32 rotation = b2Body_GetAngle(id);
+		const auto isStatic = b2Body_GetType(id) == b2_staticBody;
 
 		switch (shape.type) {
 			using enum ShapeType;
 		case CIRCLE:
-			renderer.disk(position, shape.radius, rotation, color, false);
+			renderer.disk(position, shape.radius, rotation, color, false, isStatic);
 			break;
 
 		case POLYGON:
-			renderer.polygon(shape.vertices, shape.boundaryEdges, shape.trianglesVertices, position, rotation, color, false);
+			renderer.polygon(shape.vertices, shape.boundaryEdges, shape.trianglesVertices, position, rotation, color, false, isStatic);
 			break;
 		}
 	};

@@ -39,7 +39,7 @@ struct Editor {
 	struct CircleTool {
 		std::optional<Vec2> center;
 		std::optional<EditorCircleShape> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
-		void render(GameRenderer& gfx, Vec2 cursorPos, Vec4 color);
+		void render(GameRenderer& gfx, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
 	} circleTool;
 
 	struct PolygonTool {
@@ -57,8 +57,11 @@ struct Editor {
 
 	EditorMaterialType materialTypeSetting;
 	EditorMaterialTransimisive materialTransimisiveSetting = EditorMaterialTransimisive{ .speedOfTransmition = 1.0f };
+	bool isStaticSetting = false;
+
 	EditorMaterial materialSetting() const;
 	void materialSettingGui();
+	void rigidBodyGui();
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
@@ -107,6 +110,6 @@ struct Editor {
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
 	EntityArray<EditorRigidBody, EditorRigidBody::DefaultInitialize> rigidBodies;
-	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material);
+	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
 };
 

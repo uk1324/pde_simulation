@@ -36,14 +36,14 @@ void GameRenderer::drawBounds(Aabb aabb) {
 	gfx.drawLines();
 }
 
-void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected) {
-	gfx.diskTriangulated(center, radius, color);
+void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected, bool isStatic) {
+	gfx.diskTriangulated(center, radius, isStatic ? Vec4(color.xyz() / 1.3f, color.w) : color);
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 	gfx.circleTriangulated(center, radius, outlineWidth(), outlineColor);
 	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), outlineWidth(), outlineColor);
 } 
 
-void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected) {
+void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected, bool isStatic) {
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 
 	tempVertices.clear();
@@ -65,7 +65,11 @@ f32 GameRenderer::outlineWidth() const {
 }
 
 Vec3 GameRenderer::outlineColor(Vec3 mainColor, bool isSelected) const {
-	return isSelected ? selectedColor : mainColor / 2.0f;
+	if (isSelected) {
+		return selectedColor;
+	}
+
+	return mainColor / 2.0f;
 }
 
 void GameRenderer::drawGrid() {

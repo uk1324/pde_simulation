@@ -82,15 +82,21 @@ struct EditorRigidBody {
 	struct DefaultInitialize {
 		EditorRigidBody operator()();
 	};
-	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material);
+	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
 
 	EditorShape shape;
 	EditorMaterial material;
+	bool isStatic;
+
 
 	bool operator==(const EditorRigidBody&) const = default;
 };
 
 using EditorReflectingBodyId = EntityArrayId<EditorRigidBody>;
+
+//struct EditorEmmiter {
+//
+//};
 
 enum class EditorEntityType {
 	RIGID_BODY
