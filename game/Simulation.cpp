@@ -151,7 +151,10 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		}
 	}
 
-	waveSimulationUpdate();
+	/*for (i64 i = 0; i < 4; i++) {
+		waveSimulationUpdate(dt / 4.0f);
+	}*/
+	waveSimulationUpdate(dt);
 
 	render(renderer);
 }
@@ -172,7 +175,7 @@ Could use an implicit method for the rhs. If 1. is used then you could calculate
 
 For the time discretization I will use forward euler twice. I am not using a central difference approximation even though it has less error, because it requires values from the past frame. This might cause issues when the boundary conditions change between frames.
 */
-void Simulation::waveSimulationUpdate() {
+void Simulation::waveSimulationUpdate(f32 deltaTime) {
 	for (i32 yi = 0; yi < simulationGridSize.y; yi++) {
 		for (i32 xi = 0; xi < simulationGridSize.x; xi++) {
 			switch (cellType(xi, yi)) {
@@ -180,7 +183,9 @@ void Simulation::waveSimulationUpdate() {
 				break;
 
 			case CellType::REFLECTING_WALL:
+				// Dirichlet boundary conditions
 				u(xi, yi) = 0.0f;
+				// This shouldn't do anything.
 				u_t(xi, yi) = 0.0f;
 			}
 		}
@@ -188,19 +193,36 @@ void Simulation::waveSimulationUpdate() {
 
 	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+
 			const auto laplacianU = (u(xi + 1, yi) + u(xi - 1, yi) + u(xi, yi + 1) + u(xi, yi - 1) - 4.0f * u(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);
-			u_t(xi, yi) += (laplacianU * speedSquared(xi, yi)) * dt;
+
+			/*const auto laplacianU = (
+				u(xi + 1, yi) * speedSquared(xi + 1, yi) + 
+				u(xi - 1, yi) * speedSquared(xi - 1, yi) + 
+				u(xi, yi + 1) * speedSquared(xi, yi + 1) + 
+				u(xi, yi - 1) * speedSquared(xi, yi - 1) - 
+				4.0f * u(xi, yi) * speedSquared(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);*/
+			/*const auto laplacianU = (
+				u(xi + 1, yi) * speedSquared(xi + 1, yi) +
+				u(xi - 1, yi) * speedSquared(xi - 1, yi) +
+				u(xi, yi + 1) * speedSquared(xi, yi + 1) +
+				u(xi, yi - 1) * speedSquared(xi, yi - 1) -
+				4.0f * u(xi, yi) * speedSquared(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);*/
+
+			u_t(xi, yi) += laplacianU * speedSquared(xi, yi) * deltaTime;
+		}
+	}
+
+	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
+		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			u(xi, yi) += deltaTime * u_t(xi, yi);
 		}
 	}
 	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
-			u(xi, yi) += dt * u_t(xi, yi);
-		}
-	}
-	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
-		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
+			//u_t(xi, yi) *= 0.9f;
 			u_t(xi, yi) *= 0.99f;
-			//u_t(xi, yi) *= 0.995f;
+			//u_t(xi, yi) *= 0.999f;
 		}
 	}
 }

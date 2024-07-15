@@ -17,7 +17,7 @@ struct Simulation {
 	f32 dt;
 
 	void update(GameRenderer& renderer, const GameInput& input);
-	void waveSimulationUpdate();
+	void waveSimulationUpdate(f32 deltaTime);
 	void render(GameRenderer& renderer);
 
 	void reset();

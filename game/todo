@@ -1,0 +1,12 @@
+The interpolation should happen before the color mapping.
+
+Add a modal with a reset button when the solver blows up.
+
+Terminate simplification algorithm after the numer of tranversed vertices = numer of intersections of lines + number of vertices vertices is reached.
+
+Currently one of the slowest parts of the simulation code is checking wether a point is in a polygon. 
+Here is an algorithm for making that faster
+https://cs.stackexchange.com/questions/59917/repeated-point-in-polygon-preprocessing-complexity-given-logarithmic-query-time
+Also maybe because I check points on a grid consecutively this could be implemeted faster.
+Maybe just some rendering algorithm could be used.
+https://www.gamedev.net/reference/articles/article367.asp (haven't read yet)

@@ -1,5 +1,6 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
+#include <engine/Math/ComplexPolygonOutline.hpp>
 #include <game/Constants.hpp>
 #include <engine/Math/PointInShape.hpp>
 #include <engine/Math/ShapeAabb.hpp>
@@ -94,8 +95,14 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 	case POLYGON:
 		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftHeld, Input::isKeyDown(KeyCode::LEFT_SHIFT), input.cursorRightDown);
 		if (finished) {
+			const auto& outline = complexPolygonOutline(constView(polygonTool.vertices));
+			if (!outline.has_value()) {
+				polygonTool.vertices.clear();
+				polygonTool.openInvalidShapeModal();
+				break;
+			}
 			auto shape = createPolygonShape();
-			shape->initializeFromVertices(constView(polygonTool.vertices));
+			shape->initializeFromVertices(constView(*outline));
 			polygonTool.vertices.clear();
 			createObject(EditorShape(shape.id));
 		}
@@ -354,6 +361,8 @@ void Editor::gui() {
 
 	}
 	ImGui::End();
+
+	polygonTool.invalidShapeModalGui();
 }
 
 void Editor::selectToolGui() {
@@ -990,6 +999,26 @@ void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 col
 		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, false);
 	}
 }
+
+void Editor::PolygonTool::openInvalidShapeModal() {
+	ImGui::OpenPopup(invalidShapeModalName);
+}
+
+void Editor::PolygonTool::invalidShapeModalGui() {
+	const auto center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(invalidShapeModalName, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		return;
+	}
+	ImGui::Text("Couldn't process polygon.");
+	
+	if (ImGui::Button("ok")) {
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
+}
+
 
 Editor::PolygonTool Editor::PolygonTool::make() {
 	return PolygonTool{

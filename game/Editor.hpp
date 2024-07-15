@@ -46,6 +46,10 @@ struct Editor {
 
 		bool update(Vec2 cursorPos, bool drawDown, bool drawHeld, bool closeCurveDown, bool cancelDrawingDown);
 
+		static constexpr const char* invalidShapeModalName = "invalid shape";
+		void openInvalidShapeModal();
+		void invalidShapeModalGui();
+
 		bool drawing;
 		List<Vec2> vertices;
 	} polygonTool;

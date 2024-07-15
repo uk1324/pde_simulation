@@ -1,5 +1,4 @@
 #include <game/EditorEntities.hpp>
-#include <engine/Math/ComplexPolygonOutline.hpp>
 #include <dependencies/earcut/earcut.hpp>
 #include <engine/Math/Triangulate.hpp>
 
@@ -32,8 +31,8 @@ EditorPolygonShape EditorPolygonShape::make() {
 }
 
 void EditorPolygonShape::initializeFromVertices(View<const Vec2> inputVertices) {
-	const auto& outline = complexPolygonOutline(inputVertices);
-	for (const auto& v : outline) {
+	vertices.clear();
+	for (const auto& v : inputVertices) {
 		vertices.add(v);
 	}
 
