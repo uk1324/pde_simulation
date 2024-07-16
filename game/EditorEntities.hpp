@@ -2,6 +2,7 @@
 
 #include <engine/Math/Vec2.hpp>
 #include <game/EntityArray.hpp>
+#include <game/InputButton.hpp>
 #include <List.hpp>
 
 struct EditorCircleShape {
@@ -102,15 +103,19 @@ struct EditorEmitter {
 		EditorEmitter operator()();
 	};
 
-	EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength);
-	void initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength);
+	EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton>);
+	void initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button);
 
 	EditorRigidBodyId rigidbody;
 	Vec2 positionRelativeToRigidBody;
 
 	f32 strength;
-	//f32 period
-	//f32 phaseOffset
+
+	bool oscillate;
+	f32 period;
+	f32 phaseOffset;
+
+	std::optional<InputButton> activateOn;
 };
 
 using EditorEmitterId = EntityArrayId<EditorEmitter>;

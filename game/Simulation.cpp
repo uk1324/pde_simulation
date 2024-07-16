@@ -1,5 +1,6 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <engine/Math/Constants.hpp>
 #include <game/RelativePositions.hpp>
 #include <imgui/imgui.h>
 #include <engine/Math/ShapeAabb.hpp>
@@ -36,8 +37,8 @@ Simulation::Simulation()
 	, emitters(List<Emitter>::empty())
 	, mouseJoint(b2_nullJointId)
 	, getShapesResult(List<b2ShapeId>::empty())
-	, dt(1.0f / 60.0f) {
-
+	, realtimeDt(1.0f / 60.0f)
+	, simulationElapsed(0.0f) {
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -85,18 +86,33 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	for (const auto& emitter : emitters) {
+		if (emitter.activateOn.has_value() && !inputButtonIsHeld(*emitter.activateOn)) {
+			continue;
+		}
+
 		const auto pos = getEmitterPos(emitter);
 		const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize) + Vec2T<i64>(1);
-		fillCircle(u, gridPosition, 3, emitter.strength);
+
+		f32 strength;
+		if (emitter.oscillate) {
+			strength = sin((simulationElapsed / emitter.period + emitter.phaseOffset) * TAU<f32>);
+			//strength = std::max(0.0f, ) * emitter.strength;
+			strength *= emitter.strength;
+		} else {
+			strength = emitter.strength;
+		}
+
+		fillCircle(u, gridPosition, 3, strength);
 	}
 
-	cameraMovement(camera, input, dt);
+	cameraMovement(camera, input, realtimeDt);
 	
 	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
 	
-	const auto deltaTime = dt * simulationSettings.timeScale;
+	const auto simulationDt = realtimeDt * simulationSettings.timeScale;
+	simulationElapsed += simulationDt;
 
-	b2World_Step(world, deltaTime, simulationSettings.rigidbodySimulationSubStepCount);
+	b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
 	fill(cellType, CellType::EMPTY);
 
@@ -158,13 +174,13 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	for (i64 i = 0; i < simulationSettings.waveEquationSimulationSubStepCount; i++) {
-		waveSimulationUpdate(deltaTime / simulationSettings.waveEquationSimulationSubStepCount);
+		waveSimulationUpdate(simulationDt / simulationSettings.waveEquationSimulationSubStepCount);
 	}
 
 	render(renderer);
 }
 
-void Simulation::waveSimulationUpdate(f32 deltaTime) {
+void Simulation::waveSimulationUpdate(f32 simulationDt) {
 
 	if (simulationSettings.topBoundaryCondition == SimulationBoundaryCondition::REFLECTING) {
 		for (i64 xi = 1; xi < simulationGridSize.x - 1; xi++) {
@@ -207,7 +223,7 @@ void Simulation::waveSimulationUpdate(f32 deltaTime) {
 
 			const auto laplacianU = (u(xi + 1, yi) + u(xi - 1, yi) + u(xi, yi + 1) + u(xi, yi - 1) - 4.0f * u(xi, yi)) / (Constants::CELL_SIZE * Constants::CELL_SIZE);
 
-			u_t(xi, yi) += laplacianU * speedSquared(xi, yi) * deltaTime;
+			u_t(xi, yi) += laplacianU * speedSquared(xi, yi) * simulationDt;
 		}
 	}
 
@@ -240,12 +256,12 @@ void Simulation::waveSimulationUpdate(f32 deltaTime) {
 #undef CALCULATE_U_T
 	for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 		for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
-			u(xi, yi) += deltaTime * u_t(xi, yi);
+			u(xi, yi) += simulationDt * u_t(xi, yi);
 		}
 	}
 
 	if (simulationSettings.dampingEnabled) {
-		const auto scale = exp(deltaTime * log(simulationSettings.dampingPerSecond));
+		const auto scale = exp(simulationDt * log(simulationSettings.dampingPerSecond));
 		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
 				u(xi, yi) *= scale;
@@ -254,7 +270,7 @@ void Simulation::waveSimulationUpdate(f32 deltaTime) {
 	}
 
 	if (simulationSettings.speedDampingEnabled) {
-		const auto scale = exp(deltaTime * log(simulationSettings.speedDampingPerSecond));
+		const auto scale = exp(simulationDt * log(simulationSettings.speedDampingPerSecond));
 		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
 				u_t(xi, yi) *= scale;
@@ -425,6 +441,8 @@ void Simulation::reset() {
 
 	fill(u, 0.0f);
 	fill(u_t, 0.0f);
+
+	simulationElapsed = 0.0f;
 }
 
 Aabb Simulation::displayGridBounds() const {

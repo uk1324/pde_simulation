@@ -1,5 +1,7 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
+#include <engine/Input/InputUtils.hpp>
+#include <game/InputButton.hpp>
 #include <game/RelativePositions.hpp>
 #include <engine/Math/ComplexPolygonOutline.hpp>
 #include <game/Constants.hpp>
@@ -110,7 +112,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 				Vec2 pos = input.cursorPos;
 				pos -= transform->translation;
 				pos *= Rotation(-transform->rotation);
-				emitter->initialize(body.id, pos, emitterStrengthSetting);
+				emitter->initialize(body.id, pos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting, std::nullopt);
 				actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(emitter.id))));
 			}
 			break;
@@ -425,6 +427,19 @@ void Editor::gui() {
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
+		auto setAllTo = [this](SimulationBoundaryCondition condition) {
+			simulationSettings.topBoundaryCondition = condition;
+			simulationSettings.bottomBoundaryCondition = condition;
+			simulationSettings.leftBoundaryCondition = condition;
+			simulationSettings.rightBoundaryCondition = condition;
+		};
+
+		if (ImGui::Button("set all to reflecting")) {
+			setAllTo(SimulationBoundaryCondition::REFLECTING);
+		}
+		if (ImGui::Button("set all to absorbing")) {
+			setAllTo(SimulationBoundaryCondition::ABSORBING);
+		}
 
 
 	}
@@ -480,7 +495,11 @@ void Editor::gui() {
 			break;
 
 		case EMMITER:
-			emitterGui(emitterStrengthSetting);
+			if (beginPropertyEditor("emitterSettings")) {
+				emitterGui(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
+				Gui::endPropertyEditor();
+			}
+			Gui::popPropertyEditor();
 			break;
 		}
 
@@ -549,8 +568,22 @@ void Editor::entityGui(EditorEntityId id) {
 		break;
 	}
 
-	case EMITTER:
+	case EMITTER: {
+		auto emitter = emitters.get(id.emitter());
+		if (!emitter.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		if (beginPropertyEditor("emitterSettings")) {
+			emitterGui(emitter->strength, emitter->oscillate, emitter->period, emitter->phaseOffset);
+			Gui::leafNodeBegin("activate key");
+			inputButtonGui(emitter->activateOn, emitterWatingForKey);
+
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
 		break;
+	}
 
 	}
 }
@@ -988,12 +1021,13 @@ void Editor::materialSettingGui() {
 
 }
 
-void Editor::emitterGui(f32 strength) {
-	if (beginPropertyEditor("emitterSettings")) {
-		Gui::inputFloat("strength", strength);
-		Gui::endPropertyEditor();
+void Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset) {
+	Gui::inputFloat("strength", strength);
+	Gui::checkbox("oscillate", oscillate);
+	if (oscillate) {
+		Gui::inputFloat("period", period);
+		Gui::inputFloat("phase offset", phaseOffset);
 	}
-	Gui::popPropertyEditor();
 }
 
 bool Editor::canBeMovedByGizmo(EditorEntityType type) {

@@ -62,7 +62,7 @@ EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
 }
 
 EditorEmitter EditorEmitter::DefaultInitialize::operator()() {
-	return EditorEmitter(BACKGROUND_EDITOR_RIGID_BODY_ID, Vec2(0.0f), 0.0f);
+	return EditorEmitter(BACKGROUND_EDITOR_RIGID_BODY_ID, Vec2(0.0f), 0.0f, false, 0.0f, 0.0f, std::nullopt);
 }
 
 EditorPolygonShape EditorPolygonShape::make() {
@@ -144,13 +144,21 @@ bool EditorMaterial::operator==(const EditorMaterial& other) const {
 EditorMaterial::EditorMaterial(EditorMaterialType type)	
 	: type(type) {}
 
-EditorEmitter::EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength)
+EditorEmitter::EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button)
 	: rigidbody(rigidbody)
 	, positionRelativeToRigidBody(positionRelativeToRigidBody)
-	, strength(strength) {}
+	, strength(strength)
+	, oscillate(oscillate) 
+	, period(period) 
+	, phaseOffset(phaseOffset)
+	, activateOn(button) {}
 
-void EditorEmitter::initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength) {
+void EditorEmitter::initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button) {
 	this->rigidbody = rigidbody;
 	this->positionRelativeToRigidBody = positionRelativeToRigidBody;
 	this->strength = strength;
+	this->oscillate = oscillate;
+	this->period = period;
+	this->phaseOffset = phaseOffset;
+	this->activateOn = button;
 }

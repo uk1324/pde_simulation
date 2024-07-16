@@ -6,6 +6,7 @@
 #include <game/Box2d.hpp>
 #include <game/GameRenderer.hpp>
 #include <game/SimulationSettings.hpp>
+#include <game/InputButton.hpp>
 
 enum class CellType : u8 {
 	EMPTY,
@@ -15,16 +16,18 @@ enum class CellType : u8 {
 struct Simulation {
 	Simulation();
 
-	f32 dt;
+	f32 realtimeDt;
 
 	void update(GameRenderer& renderer, const GameInput& input);
-	void waveSimulationUpdate(f32 deltaTime);
+	void waveSimulationUpdate(f32 simulationDt);
 	void render(GameRenderer& renderer);
 
 	void reset();
 
 	Aabb displayGridBounds() const;
 	Aabb simulationGridBounds() const;
+
+	f32 simulationElapsed;
 
 	Vec2T<i64> simulationGridSize;
 
@@ -65,6 +68,12 @@ struct Simulation {
 		b2BodyId body;
 		Vec2 positionRelativeToBody;
 		f32 strength;
+
+		bool oscillate;
+		f32 period;
+		f32 phaseOffset;
+		
+		std::optional<InputButton> activateOn;
 	};
 	List<Emitter> emitters;
 	Vec2 getEmitterPos(const Emitter& emitter);

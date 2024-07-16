@@ -158,6 +158,10 @@ void MainLoop::update() {
 					.body = physicsId->second,
 					.positionRelativeToBody = emitter->positionRelativeToRigidBody,
 					.strength = emitter->strength,
+					.oscillate = emitter->oscillate,
+					.period = emitter->period,
+					.phaseOffset = emitter->phaseOffset,
+					.activateOn = emitter->activateOn,
 				});
 			}
 		} else if (currentState == State::SIMULATION) {

@@ -77,11 +77,17 @@ struct Editor {
 	void rigidBodyGui();
 
 	f32 emitterStrengthSetting = 5.0f;
-	void emitterGui(f32 strength);
+	bool emitterOscillateSetting = false;
+	f32 emitterPeriodSetting = 1.0f;
+	f32 emitterPhaseOffsetSetting = 0.0f;
+
+	void emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset);
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
 	static bool canBeMovedByGizmo(EditorEntityType type);
+
+	bool emitterWatingForKey = false;
 
 	Camera camera;
 
