@@ -139,7 +139,8 @@ void MainLoop::update() {
 					simulation.transmissiveObjects.add(Simulation::TransmissiveObject{
 						.id = bodyId,
 						.shape = std::move(shapeInfo),
-						.speedOfTransmition = body->material.transimisive.speedOfTransmition
+						.speedOfTransmition = body->material.transimisive.speedOfTransmition,
+						.matchBackgroundSpeedOfTransmission = body->material.transimisive.matchBackgroundSpeedOfTransmission
 					});
 					break;
 
@@ -156,7 +157,7 @@ void MainLoop::update() {
 				simulation.emitters.add(Simulation::Emitter{
 					.body = physicsId->second,
 					.positionRelativeToBody = emitter->positionRelativeToRigidBody,
-					.strength = emitter->strength
+					.strength = emitter->strength,
 				});
 			}
 		} else if (currentState == State::SIMULATION) {

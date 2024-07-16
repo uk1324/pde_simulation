@@ -58,6 +58,7 @@ enum class EditorMaterialType {
 };
 
 struct EditorMaterialTransimisive {
+	bool matchBackgroundSpeedOfTransmission;
 	f32 speedOfTransmition;
 
 	bool operator==(const EditorMaterialTransimisive&) const = default;
@@ -108,6 +109,8 @@ struct EditorEmitter {
 	Vec2 positionRelativeToRigidBody;
 
 	f32 strength;
+	//f32 period
+	//f32 phaseOffset
 };
 
 using EditorEmitterId = EntityArrayId<EditorEmitter>;

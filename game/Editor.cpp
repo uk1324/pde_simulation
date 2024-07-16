@@ -264,9 +264,12 @@ void Editor::selectToolUpdate(const GameInput& input) {
 						const auto position = getEmitterPosition(emitter.entity);
 						if (isPointInCircle(position, Constants::EMITTER_DISPLAY_RADIUS, input.cursorPos)) {
 							entityUnderCursor = EditorEntityId(emitter.id);
+							break;
 						}
 					}
+				}
 
+				if (!entityUnderCursor.has_value()) {
 					for (auto body : rigidBodies) {
 						if (isPointInEditorShape(body->shape, input.cursorPos)) {
 							entityUnderCursor = EditorEntityId(body.id);
@@ -386,7 +389,7 @@ void Editor::gui() {
 	};
 	ImGui::Begin(simulationSettingsWindowName);
 	{
-		if (Gui::beginPropertyEditor(Gui::PropertyEditorFlags::TableAdjustable)) {
+		if (beginPropertyEditor("simulation settings")) {
 			Gui::inputI32("wave simulation substeps", simulationSettings.waveEquationSimulationSubStepCount);
 			simulationSettings.waveEquationSimulationSubStepCount = std::clamp(simulationSettings.waveEquationSimulationSubStepCount, 1, 20);
 
@@ -414,7 +417,7 @@ void Editor::gui() {
 		Gui::popPropertyEditor();
 
 		ImGui::SeparatorText("boundary conditions");
-		if (Gui::beginPropertyEditor()) {
+		if (beginPropertyEditor("boundary conditions")) {
 			boundaryConditionCombo("top", simulationSettings.topBoundaryCondition);
 			boundaryConditionCombo("bottom", simulationSettings.bottomBoundaryCondition);
 			boundaryConditionCombo("left", simulationSettings.leftBoundaryCondition);
@@ -487,6 +490,10 @@ void Editor::gui() {
 	polygonTool.invalidShapeModalGui();
 }
 
+bool Editor::beginPropertyEditor(const char* id) {
+	return Gui::beginPropertyEditor(id, Gui::PropertyEditorFlags::TableStetchToFit);
+}
+
 void Editor::selectToolGui() {
 	ImGui::NewLine();
 	ImGui::Text("selection");
@@ -518,7 +525,7 @@ void Editor::entityGui(EditorEntityId id) {
 
 		ImGui::SeparatorText("rigid body");
 
-		if (Gui::beginPropertyEditor()) {
+		if (beginPropertyEditor("rigidBody")) {
 			Gui::checkbox("is static", body->isStatic);
 			Gui::endPropertyEditor();
 		}
@@ -529,7 +536,7 @@ void Editor::entityGui(EditorEntityId id) {
 
 
 		ImGui::SeparatorText("shape");
-		if (Gui::beginPropertyEditor()) {
+		if (beginPropertyEditor("rigidBodyShape")) {
 			shapeGui(body->shape);
 			Gui::endPropertyEditor();
 		}
@@ -866,7 +873,7 @@ Vec2 Editor::selectedEntitiesCenter() {
 
 void Editor::rigidBodyGui() {
 	ImGui::SeparatorText("rigid body");
-	if (Gui::beginPropertyEditor()) {
+	if (beginPropertyEditor("rigidBodyGui")) {
 		Gui::checkbox("is static", isStaticSetting);
 		Gui::endPropertyEditor();
 	}
@@ -966,10 +973,13 @@ void Editor::materialSettingGui() {
 	case RELFECTING:
 		break;
 	case TRANSIMISIVE:
-		if (Gui::beginPropertyEditor()) {
-			Gui::inputFloat("speed of transmission", materialTransimisiveSetting.speedOfTransmition);
-			// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
-			materialTransimisiveSetting.speedOfTransmition = std::max(materialTransimisiveSetting.speedOfTransmition, 0.0f);
+		if (beginPropertyEditor("transmissiveSettings")) {
+			Gui::checkbox("match background speed of transmission", materialTransimisiveSetting.matchBackgroundSpeedOfTransmission);
+			if (!materialTransimisiveSetting.matchBackgroundSpeedOfTransmission) {
+				Gui::inputFloat("speed of transmission", materialTransimisiveSetting.speedOfTransmition);
+				// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
+				materialTransimisiveSetting.speedOfTransmition = std::max(materialTransimisiveSetting.speedOfTransmition, 0.0f);
+			}
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
@@ -979,7 +989,7 @@ void Editor::materialSettingGui() {
 }
 
 void Editor::emitterGui(f32 strength) {
-	if (Gui::beginPropertyEditor()) {
+	if (beginPropertyEditor("emitterSettings")) {
 		Gui::inputFloat("strength", strength);
 		Gui::endPropertyEditor();
 	}

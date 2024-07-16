@@ -15,6 +15,7 @@ struct Editor {
 	void selectToolUpdate(const GameInput& input);
 
 	void gui();
+	bool beginPropertyEditor(const char* id);
 	void selectToolGui();
 	void entityGui(EditorEntityId id);
 	void shapeGui(EditorShape& shape);
@@ -65,7 +66,10 @@ struct Editor {
 	} emitterTool;
 
 	EditorMaterialType materialTypeSetting;
-	EditorMaterialTransimisive materialTransimisiveSetting = EditorMaterialTransimisive{ .speedOfTransmition = 1.0f };
+	EditorMaterialTransimisive materialTransimisiveSetting = EditorMaterialTransimisive{ 
+		.matchBackgroundSpeedOfTransmission = false,
+		.speedOfTransmition = 1.0f, 
+	};
 	bool isStaticSetting = false;
 
 	EditorMaterial materialSetting() const;

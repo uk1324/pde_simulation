@@ -56,6 +56,8 @@ struct Simulation {
 		b2BodyId id;
 		ShapeInfo shape;
 		f32 speedOfTransmition;
+		// @Performance: Could make a different type of object that always has matchBackgroundSpeedOfTransmission set to true. This might make some code faster, but it would require writing more code.
+		bool matchBackgroundSpeedOfTransmission;
 	};
 	List<TransmissiveObject> transmissiveObjects;
 

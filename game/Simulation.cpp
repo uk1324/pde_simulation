@@ -38,15 +38,6 @@ Simulation::Simulation()
 	, getShapesResult(List<b2ShapeId>::empty())
 	, dt(1.0f / 60.0f) {
 
-	/*for (i64 yi = 0; yi < simulationGridSize.y; yi++) {
-		cellType(0, yi) = CellType::REFLECTING_WALL;
-		cellType(simulationGridSize.x - 1, yi) = CellType::REFLECTING_WALL;
-	}
-
-	for (i64 xi = 1; xi < simulationGridSize.x - 1; xi++) {
-		cellType(xi, 0) = CellType::REFLECTING_WALL;
-		cellType(xi, simulationGridSize.y - 1) = CellType::REFLECTING_WALL;
-	}*/
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -158,6 +149,9 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
 		fill(speedSquared, pow(defaultSpeed, 2.0f));
 		for (const auto& object : transmissiveObjects) {
+			if (object.matchBackgroundSpeedOfTransmission) {
+				continue;
+			}
 			const auto speedOfTransmitionSquared = pow(object.speedOfTransmition, 2.0f);
 			FILL_SHAPE(speedSquared(xi, yi) = speedOfTransmitionSquared;)
 		}
