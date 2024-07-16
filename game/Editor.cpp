@@ -1,5 +1,6 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
+#include <game/RelativePositions.hpp>
 #include <engine/Math/ComplexPolygonOutline.hpp>
 #include <game/Constants.hpp>
 #include <engine/Math/PointInShape.hpp>
@@ -22,6 +23,7 @@ Editor Editor::make() {
 		.actions = EditorActions::make(),
 		.polygonShapes = decltype(polygonShapes)::make(),
 		.rigidBodies = decltype(rigidBodies)::make(),
+		.emitters = decltype(emitters)::make(),
 	};
 
 	editor.camera.pos = editor.roomBounds.center();
@@ -70,7 +72,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 			   
-	case POLYGON:
+	case POLYGON: {
 		const auto finished = polygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorLeftHeld, Input::isKeyDown(KeyCode::LEFT_SHIFT), input.cursorRightDown);
 		if (finished) {
 			const auto& outline = complexPolygonOutline(constView(polygonTool.vertices));
@@ -85,7 +87,36 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 			createObject(EditorShape(shape.id));
 		}
 		break;
+	}
 		
+	
+	case EMMITER: {
+		for (const auto& body : rigidBodies) {
+			if (!isPointInEditorShape(body->shape, input.cursorPos)) {
+				emitterTool.isRigidBodyUnderCursor = false;
+				continue;
+			}
+			const auto transform = tryGetShapeTransform(body->shape);
+			if (!transform.has_value()) {
+				CHECK_NOT_REACHED();
+				continue;
+			}
+
+			emitterTool.isRigidBodyUnderCursor = true;
+			
+			if (input.cursorLeftDown) {
+				auto emitter = emitters.create();
+
+				Vec2 pos = input.cursorPos;
+				pos -= transform->translation;
+				pos *= Rotation(-transform->rotation);
+				emitter->initialize(body.id, pos, emitterStrengthSetting);
+				actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(emitter.id))));
+			}
+			break;
+		}
+	}
+
 	}
 
 	render(renderer, input);
@@ -116,15 +147,17 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				switch (entity.type) {
 					using enum EditorEntityType;
 				case RIGID_BODY: {
-					auto body = rigidBodies.get(entity.reflectingBody());
+					auto body = rigidBodies.get(entity.rigidBody());
 					if (!body.has_value()) {
 						CHECK_NOT_REACHED();
 						continue;
 					}
 					gizmoSelectedShapesAtGrabStart.add(cloneShape(body->shape));
 					break;
-
 				}
+
+				case EMITTER:
+					break;
 				}
 			}
 			break;
@@ -132,34 +165,37 @@ void Editor::selectToolUpdate(const GameInput& input) {
 		case GRAB_END: {
 			cursorCaptured = true;
 
-			if (selectedEntities.size() != gizmoSelectedShapesAtGrabStart.size()) {
-				CHECK_NOT_REACHED();
-				break;
-			}
-
 			i64 i = 0;
-			actions.beginMulticommand();
+			const auto s = actions.beginMulticommand();
 			for (auto& entity : selectedEntities) {
 				switch (entity.type) {
 					using enum EditorEntityType;
 				case RIGID_BODY: {
-					auto body = rigidBodies.get(entity.reflectingBody());
+					auto body = rigidBodies.get(entity.rigidBody());
 					if (!body.has_value()) {
 						CHECK_NOT_REACHED();
 						continue;
 					}
+					if (i >= gizmoSelectedShapesAtGrabStart.size()) {
+						CHECK_NOT_REACHED();
+						continue;
+					}
+
 					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material, body->isStatic);
 					auto newShape = cloneShape(old.shape);
 					shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
-					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.reflectingBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
+					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.rigidBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
+
+					i++;
+					break;
+				}
+
+				case EMITTER:
 					break;
 
 				}
-
-				}
-				i++;
 			}
-			actions.endMulticommand();
+			actions.endMulticommand(s);
 
 			break;
 		}
@@ -167,12 +203,16 @@ void Editor::selectToolUpdate(const GameInput& input) {
 		case GRABBED: {
 			cursorCaptured = true;
 
-			if (selectedEntities.size() != gizmoSelectedShapesAtGrabStart.size()) {
-				CHECK_NOT_REACHED();
-				break;
-			}
 			i64 i = 0;
 			for (auto& entity : selectedEntities) {
+				if (!canBeMovedByGizmo(entity.type)) {
+					continue;
+				}
+				if (i >= gizmoSelectedShapesAtGrabStart.size()) {
+					CHECK_NOT_REACHED();
+					continue;
+				}
+
 				entitySetPosition(entity, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
 				i++;
 			}
@@ -201,6 +241,14 @@ void Editor::selectToolUpdate(const GameInput& input) {
 					selectedEntities.clear();
 				}
 
+				for (auto emitter : emitters) {
+					const auto position = getEmitterPosition(emitter.entity);
+					const auto aabb = circleAabb(position, Constants::EMITTER_DISPLAY_RADIUS);
+					if (selectionBox->contains(aabb)) {
+						selectedEntities.insert(EditorEntityId(emitter.id));
+					}
+				}
+
 				for (auto body : rigidBodies) {
 					if (isEditorShapeContainedInAabb(body->shape, *selectionBox)) {
 						selectedEntities.insert(EditorEntityId(body.id));
@@ -211,9 +259,14 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				// TODO: Make an option to enable a modal menu that would allow the user to choose which entity to select if there are multiple entities under the cursor.
 				std::optional<EditorEntityId> entityUnderCursor;
 
-				// Place the joints on top. Iterate over them first.
-
 				if (!entityUnderCursor.has_value()) {
+					for (auto emitter : emitters) {
+						const auto position = getEmitterPosition(emitter.entity);
+						if (isPointInCircle(position, Constants::EMITTER_DISPLAY_RADIUS, input.cursorPos)) {
+							entityUnderCursor = EditorEntityId(emitter.id);
+						}
+					}
+
 					for (auto body : rigidBodies) {
 						if (isPointInEditorShape(body->shape, input.cursorPos)) {
 							entityUnderCursor = EditorEntityId(body.id);
@@ -249,14 +302,14 @@ void Editor::selectToolUpdate(const GameInput& input) {
 	}
 
 	if (input.deleteDown) {
-		actions.beginMulticommand();
+		const auto s = actions.beginMulticommand();
 		for (auto& entity : selectedEntities) {
 			destoryEntity(entity);
 		}
 		std::unordered_set<EditorEntityId> empty;
 		actions.addSelectionChange(*this, selectedEntities, empty);
 		selectedEntities.clear();
-		actions.endMulticommand();
+		actions.endMulticommand(s);
 	}
 }
 
@@ -274,12 +327,14 @@ void Editor::gui() {
 		const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
 		ImGui::DockBuilderSetNodeSize(leftId, ImVec2(300.0f, 1.0f));
 
-		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
 		ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
+		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
 
 		ImGui::DockBuilderFinish(id);
 
 		ImGui::SetWindowFocus(settingsWindowName);
+
+		firstFrame = false;
 	}
 	bool openHelpWindow = false;
 	if (ImGui::BeginMainMenuBar()) {
@@ -292,55 +347,6 @@ void Editor::gui() {
 		
 		ImGui::EndMainMenuBar();
 	}
-
-	ImGui::Begin(settingsWindowName);
-	{
-	
-		struct ToolDisplay {
-			ToolType type;
-			const char* name;
-			const char* tooltip;
-		};
-
-		const ToolDisplay tools[]{
-			{ ToolType::SELECT, "select", "" },
-			{ ToolType::CIRCLE, "circle", "" },
-			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
-		};
-		
-		ImGui::SeparatorText("tool");
-
-		const auto oldSelection = selectedTool;
-
-		for (const auto& tool : tools) {
-			if (ImGui::Selectable(tool.name, tool.type == selectedTool)) {
-				selectedTool = tool.type;
-			}
-			ImGui::SetItemTooltip(tool.tooltip);
-		}
-
-		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
-			selectedEntities.clear();
-		}
-
-		switch (selectedTool) {
-			using enum ToolType;
-
-		case SELECT:
-			selectToolGui();
-			break;
-
-		case POLYGON:
-			rigidBodyGui();
-			break;
-
-		case CIRCLE:
-			rigidBodyGui();
-			break;
-		}
-
-	}
-	ImGui::End();
 
 	auto boundaryConditionCombo = [](const char* text, SimulationBoundaryCondition& value) {
 		struct Entry {
@@ -421,12 +427,64 @@ void Editor::gui() {
 	}
 	ImGui::End();
 
-	polygonTool.invalidShapeModalGui();
+	ImGui::Begin(settingsWindowName);
+	{
 
-	if (firstFrame) {
-		ImGui::SetWindowFocus(settingsWindowName);
-		firstFrame = false;
+		struct ToolDisplay {
+			ToolType type;
+			const char* name;
+			const char* tooltip;
+		};
+
+		const ToolDisplay tools[]{
+			{ ToolType::SELECT, "select", "" },
+			{ ToolType::CIRCLE, "circle", "" },
+			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
+		};
+
+		ImGui::SeparatorText("tool");
+
+		const auto oldSelection = selectedTool;
+
+		for (const auto& tool : tools) {
+			if (ImGui::Selectable(tool.name, tool.type == selectedTool)) {
+				selectedTool = tool.type;
+			}
+			ImGui::SetItemTooltip(tool.tooltip);
+		}
+
+		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
+			selectedEntities.clear();
+		}
+
+
+		ImGui::Separator();
+
+		switch (selectedTool) {
+			using enum ToolType;
+
+		case SELECT:
+			selectToolGui();
+			break;
+
+		case POLYGON:
+			rigidBodyGui();
+			break;
+
+		case CIRCLE:
+			rigidBodyGui();
+			break;
+
+		case EMMITER:
+			emitterGui(emitterStrengthSetting);
+			break;
+		}
+
 	}
+	ImGui::End();
+
+	polygonTool.invalidShapeModalGui();
 }
 
 void Editor::selectToolGui() {
@@ -450,7 +508,7 @@ void Editor::entityGui(EditorEntityId id) {
 		using enum EditorEntityType;
 
 	case RIGID_BODY: {
-		auto body = rigidBodies.get(id.reflectingBody());
+		auto body = rigidBodies.get(id.rigidBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -479,9 +537,13 @@ void Editor::entityGui(EditorEntityId id) {
 
 		// @Performance: could make the gui return if modified and only then add.
 		if (old != *body) {
-			actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.reflectingBody(), old, *body)));
+			actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), old, *body)));
 		}
+		break;
 	}
+
+	case EMITTER:
+		break;
 
 	}
 }
@@ -544,6 +606,10 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		}
 	}
 
+	for (const auto& emitter : emitters) {
+		renderer.emitter(getEmitterPosition(emitter.entity), false);
+	}
+
 	renderer.gfx.drawFilledTriangles();
 
 	switch (selectedTool) {
@@ -588,6 +654,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 
+	case EMMITER: {
+		if (emitterTool.isRigidBodyUnderCursor) {
+			renderer.emitter(input.cursorPos, true);
+			renderer.gfx.drawFilledTriangles();
+		}
+	}
 
 	}
 
@@ -603,7 +675,6 @@ void Editor::destoryAction(EditorAction& action) {
 	}
 
 	case DESTROY_ENTITY: {
-		fullyDeleteEntity(action.destoryEntity.id);
 		break;
 	}
 
@@ -734,14 +805,19 @@ void Editor::fullyDeleteEntity(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case RIGID_BODY: {
-		const auto entity = rigidBodies.getEvenIfInactive(id.reflectingBody());
+		const auto entity = rigidBodies.getEvenIfInactive(id.rigidBody());
 		if (!entity.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
 		}
 		deleteShape(entity->shape);
+ 		rigidBodies.destroy(id.rigidBody());
 		break;
 	}
+
+	case EMITTER:
+		emitters.destroy(id.emitter());
+		break;
 		
 	}
 }
@@ -751,7 +827,11 @@ void Editor::activateEntity(const EditorEntityId& id) {
 		using enum EditorEntityType;
 
 	case RIGID_BODY:
-		rigidBodies.activate(id.reflectingBody());
+		rigidBodies.activate(id.rigidBody());
+		break;
+
+	case EMITTER:
+		emitters.activate(id.emitter());
 		break;
 	}
 }
@@ -760,7 +840,11 @@ void Editor::deactivateEntity(const EditorEntityId& id) {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case RIGID_BODY:
-		rigidBodies.deactivate(id.reflectingBody());
+		rigidBodies.deactivate(id.rigidBody());
+		break;
+
+	case EMITTER:
+		emitters.deactivate(id.emitter());
 		break;
 	}
 }
@@ -768,10 +852,14 @@ void Editor::deactivateEntity(const EditorEntityId& id) {
 Vec2 Editor::selectedEntitiesCenter() {
 	Vec2 center(0.0f);
 
+	i64 count = 0;
 	for (const auto& entity : selectedEntities) {
-		center += entityGetCenter(entity);
+		if (entity.type == EditorEntityType::RIGID_BODY) {
+			count++;
+			center += entityGetCenter(entity);
+		}
 	}
-	center /= selectedEntities.size();
+	center /= count;
 
 	return center;
 }
@@ -787,14 +875,21 @@ void Editor::rigidBodyGui() {
 }
 
 void Editor::destoryEntity(const EditorEntityId& id) {
+	const auto s = actions.beginMulticommand();
 	actions.add(*this, EditorAction(EditorActionDestroyEntity(id)));
-	switch (id.type) {
-		using enum EditorEntityType;
-	case RIGID_BODY: {
-		deactivateEntity(id);
-		break;
+
+	if (id.type == EditorEntityType::RIGID_BODY) {
+		for (const auto& emitter : emitters) {
+			if (emitter->rigidbody == id.rigidBody()) {
+				emitters.deactivate(emitter.id);
+				actions.add(*this, EditorAction(EditorActionDestroyEntity(EditorEntityId(emitter.id))));
+			}
+		}
 	}
-	}
+	
+
+	deactivateEntity(id);
+	actions.endMulticommand(s);
 }
 
 EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
@@ -883,17 +978,41 @@ void Editor::materialSettingGui() {
 
 }
 
+void Editor::emitterGui(f32 strength) {
+	if (Gui::beginPropertyEditor()) {
+		Gui::inputFloat("strength", strength);
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+}
+
+bool Editor::canBeMovedByGizmo(EditorEntityType type) {
+	switch (type) {
+		using enum EditorEntityType;
+	case RIGID_BODY: return true;
+	case EMITTER: return false;
+	}
+	CHECK_NOT_REACHED();
+	return false;
+}
+
+
 Vec2 Editor::entityGetPosition(const EditorEntityId& id) const {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case RIGID_BODY: {
-		const auto body = rigidBodies.get(id.reflectingBody());
+		const auto body = rigidBodies.get(id.rigidBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
 		}
 		return shapeGetPosition(body->shape);
 	}
+
+	case EMITTER:
+		// nop
+		return Vec2(0.0f);
+
 	}
 
 	CHECK_NOT_REACHED();
@@ -904,7 +1023,7 @@ void Editor::entitySetPosition(const EditorEntityId& id, Vec2 position) {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case RIGID_BODY: {
-		auto body = rigidBodies.get(id.reflectingBody());
+		auto body = rigidBodies.get(id.rigidBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
@@ -912,10 +1031,11 @@ void Editor::entitySetPosition(const EditorEntityId& id, Vec2 position) {
 		shapeSetPosition(body->shape, position);
 		break;
 	}
-		 
 
-	default:
+	case EMITTER:
+		// nop
 		break;
+	
 	}
 }
 
@@ -941,13 +1061,16 @@ Vec2 Editor::entityGetCenter(const EditorEntityId& id) const {
 	switch (id.type) {
 		using enum EditorEntityType;
 	case RIGID_BODY: {
-		const auto body = rigidBodies.get(id.reflectingBody());
+		const auto body = rigidBodies.get(id.rigidBody());
 		if (!body.has_value()) {
 			CHECK_NOT_REACHED();
 			break;
 		}
 		return shapeGetCenter(body->shape);
 	}
+
+	case EMITTER:
+		return Vec2(0.0f); // nop
 
 	}
 
@@ -1040,6 +1163,43 @@ EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	auto shape = polygonShapes.create();
 	shape->vertices.clear();
 	return shape;
+}
+
+std::optional<Editor::RigidBodyTransform> Editor::tryGetRigidBodyTransform(EditorRigidBodyId id) const {
+	const auto body = rigidBodies.get(id);
+	if (!body.has_value()) {
+		return std::nullopt;
+	}
+	return tryGetShapeTransform(body->shape);
+}
+
+std::optional<Editor::RigidBodyTransform> Editor::tryGetShapeTransform(const EditorShape& shape) const {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE: {
+		const auto& circle = shape.circle;
+		return RigidBodyTransform(circle.center, circle.angle);
+	}
+
+	case POLYGON: {
+		const auto& polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			return std::nullopt;
+		}
+		return RigidBodyTransform(polygon->translation, polygon->rotation);
+	}
+
+	}
+	return RigidBodyTransform(Vec2(0.0f), 0.0f);
+}
+
+Vec2 Editor::getEmitterPosition(const EditorEmitter& emitter) const {
+	const auto transform = tryGetRigidBodyTransform(emitter.rigidbody);
+	if (!transform.has_value()) {
+		CHECK_NOT_REACHED();
+		return Vec2(0.0f);
+	}
+	return calculateRelativePosition(emitter.positionRelativeToRigidBody, transform->translation, transform->rotation);
 }
 
 EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {
@@ -1159,3 +1319,7 @@ std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 
 
 	return box;
 }
+
+Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)
+	: translation(translation)
+	, rotation(rotation) {}

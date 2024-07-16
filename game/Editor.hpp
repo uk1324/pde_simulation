@@ -33,6 +33,7 @@ struct Editor {
 		SELECT,
 		CIRCLE,
 		POLYGON,
+		EMMITER,
 	};
 	ToolType selectedTool = ToolType::CIRCLE;
 
@@ -55,6 +56,14 @@ struct Editor {
 		List<Vec2> vertices;
 	} polygonTool;
 
+	struct EmitterTool {
+		static EmitterTool make();
+
+		bool isRigidBodyUnderCursor;
+
+		void render(Vec2 cursorPos);
+	} emitterTool;
+
 	EditorMaterialType materialTypeSetting;
 	EditorMaterialTransimisive materialTransimisiveSetting = EditorMaterialTransimisive{ .speedOfTransmition = 1.0f };
 	bool isStaticSetting = false;
@@ -63,8 +72,12 @@ struct Editor {
 	void materialSettingGui();
 	void rigidBodyGui();
 
+	f32 emitterStrengthSetting = 5.0f;
+	void emitterGui(f32 strength);
+
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
+	static bool canBeMovedByGizmo(EditorEntityType type);
 
 	Camera camera;
 
@@ -100,6 +113,15 @@ struct Editor {
 	Vec2 entityGetCenter(const EditorEntityId& id) const;
 	Vec2 shapeGetCenter(const EditorShape& shape) const;
 
+	struct RigidBodyTransform {
+		RigidBodyTransform(Vec2 translation, f32 rotation);
+
+		Vec2 translation;
+		f32 rotation;
+	};
+	std::optional<RigidBodyTransform> tryGetRigidBodyTransform(EditorRigidBodyId id) const;
+	std::optional<RigidBodyTransform> tryGetShapeTransform(const EditorShape& shape) const;
+	Vec2 getEmitterPosition(const EditorEmitter& emitter) const;
 
 	EditorShape cloneShape(const EditorShape& shape);
 
@@ -111,5 +133,6 @@ struct Editor {
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
 	EntityArray<EditorRigidBody, EditorRigidBody::DefaultInitialize> rigidBodies;
 	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
+	EntityArray<EditorEmitter, EditorEmitter::DefaultInitialize> emitters;
 };
 

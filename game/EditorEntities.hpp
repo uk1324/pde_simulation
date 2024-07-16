@@ -92,14 +92,29 @@ struct EditorRigidBody {
 	bool operator==(const EditorRigidBody&) const = default;
 };
 
-using EditorReflectingBodyId = EntityArrayId<EditorRigidBody>;
+using EditorRigidBodyId = EntityArrayId<EditorRigidBody>;
 
-//struct EditorEmmiter {
-//
-//};
+const EditorRigidBodyId BACKGROUND_EDITOR_RIGID_BODY_ID = EditorRigidBodyId(0xFFEEDDCC, 0xFFEEDDCC);
+
+struct EditorEmitter {
+	struct DefaultInitialize {
+		EditorEmitter operator()();
+	};
+
+	EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength);
+	void initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength);
+
+	EditorRigidBodyId rigidbody;
+	Vec2 positionRelativeToRigidBody;
+
+	f32 strength;
+};
+
+using EditorEmitterId = EntityArrayId<EditorEmitter>;
 
 enum class EditorEntityType {
-	RIGID_BODY
+	RIGID_BODY,
+	EMITTER,
 };
 
 struct EditorEntityId {
@@ -107,9 +122,11 @@ struct EditorEntityId {
 	u32 index;
 	u32 version;
 
-	explicit EditorEntityId(const EditorReflectingBodyId& id);
+	explicit EditorEntityId(const EditorRigidBodyId& id);
+	explicit EditorEntityId(const EditorEmitterId& id);
 
-	EditorReflectingBodyId reflectingBody() const;
+	EditorRigidBodyId rigidBody() const;
+	EditorEmitterId emitter() const;
 
 	bool operator==(const EditorEntityId&) const = default;
 };

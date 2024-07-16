@@ -1,5 +1,6 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <game/RelativePositions.hpp>
 #include <imgui/imgui.h>
 #include <engine/Math/ShapeAabb.hpp>
 #include <engine/Math/Rotation.hpp>
@@ -32,6 +33,7 @@ Simulation::Simulation()
 	, displayTexture(makeFloatTexture(debugDisplayGrid.sizeX(), debugDisplayGrid.sizeY()))
 	, reflectingObjects(List<ReflectingObject>::empty())
 	, transmissiveObjects(List<TransmissiveObject>::empty())
+	, emitters(List<Emitter>::empty())
 	, mouseJoint(b2_nullJointId)
 	, getShapesResult(List<b2ShapeId>::empty())
 	, dt(1.0f / 60.0f) {
@@ -89,6 +91,12 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	}
 	if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
 		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
+	}
+
+	for (const auto& emitter : emitters) {
+		const auto pos = getEmitterPos(emitter);
+		const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize) + Vec2T<i64>(1);
+		fillCircle(u, gridPosition, 3, emitter.strength);
 	}
 
 	cameraMovement(camera, input, dt);
@@ -397,6 +405,10 @@ void Simulation::render(GameRenderer& renderer) {
 		renderShape(object.id, object.shape, true);
 	}
 
+	for (const auto& emitter : emitters) {
+		renderer.emitter(getEmitterPos(emitter), false);
+	}
+
 	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
@@ -415,6 +427,8 @@ void Simulation::reset() {
 	}
 	transmissiveObjects.clear();
 
+	emitters.clear();
+
 	fill(u, 0.0f);
 	fill(u_t, 0.0f);
 }
@@ -428,6 +442,15 @@ Aabb Simulation::simulationGridBounds() const {
 	bounds.min -= Vec2(Constants::CELL_SIZE);
 	bounds.min += Vec2(Constants::CELL_SIZE);
 	return bounds;
+}
+
+Vec2 Simulation::getEmitterPos(const Emitter& emitter) {
+	const auto translation = toVec2(b2Body_GetPosition(emitter.body));
+	const auto rotation = b2Body_GetAngle(emitter.body);
+	Vec2 pos = emitter.positionRelativeToBody;
+	pos *= Rotation(rotation);
+	pos += translation;
+	return pos;
 }
 
 void Simulation::getShapes(b2BodyId body) {

@@ -25,7 +25,5 @@ struct MainLoop {
 	};
 	State currentState = State::EDITOR;
 
-	/*PoissonEquationDemo demo;
-	HeatEquationDemo heatEquation;*/
-	//Array2d<f32> data;
+	std::unordered_map<EditorRigidBodyId, b2BodyId> editorRigidBodyIdToPhysicsId;
 };

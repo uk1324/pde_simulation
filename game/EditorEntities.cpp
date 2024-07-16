@@ -2,13 +2,22 @@
 #include <dependencies/earcut/earcut.hpp>
 #include <engine/Math/Triangulate.hpp>
 
-EditorEntityId::EditorEntityId(const EditorReflectingBodyId& id)
+EditorEntityId::EditorEntityId(const EditorRigidBodyId& id)
 	: version(id.version())
 	, index(id.index())
 	, type(EditorEntityType::RIGID_BODY) {}
 
-EditorReflectingBodyId EditorEntityId::reflectingBody() const {
-	return EditorReflectingBodyId(index, version);
+EditorEntityId::EditorEntityId(const EditorEmitterId& id)
+	: version(id.version())
+	, index(id.index())
+	, type(EditorEntityType::EMITTER) {}
+
+EditorRigidBodyId EditorEntityId::rigidBody() const {
+	return EditorRigidBodyId(index, version);
+}
+
+EditorEmitterId EditorEntityId::emitter() const {
+	return EditorEmitterId(index, version);
 }
 
 EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
@@ -50,6 +59,10 @@ EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
 
 EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
 	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting(), false);
+}
+
+EditorEmitter EditorEmitter::DefaultInitialize::operator()() {
+	return EditorEmitter(BACKGROUND_EDITOR_RIGID_BODY_ID, Vec2(0.0f), 0.0f);
 }
 
 EditorPolygonShape EditorPolygonShape::make() {
@@ -130,3 +143,14 @@ bool EditorMaterial::operator==(const EditorMaterial& other) const {
 
 EditorMaterial::EditorMaterial(EditorMaterialType type)	
 	: type(type) {}
+
+EditorEmitter::EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength)
+	: rigidbody(rigidbody)
+	, positionRelativeToRigidBody(positionRelativeToRigidBody)
+	, strength(strength) {}
+
+void EditorEmitter::initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength) {
+	this->rigidbody = rigidbody;
+	this->positionRelativeToRigidBody = positionRelativeToRigidBody;
+	this->strength = strength;
+}

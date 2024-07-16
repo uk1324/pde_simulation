@@ -59,6 +59,14 @@ struct Simulation {
 	};
 	List<TransmissiveObject> transmissiveObjects;
 
+	struct Emitter {
+		b2BodyId body;
+		Vec2 positionRelativeToBody;
+		f32 strength;
+	};
+	List<Emitter> emitters;
+	Vec2 getEmitterPos(const Emitter& emitter);
+
 	void getShapes(b2BodyId body);
 	List<b2ShapeId> getShapesResult;
 

@@ -314,3 +314,16 @@ template<typename Entity>
 auto EntityArrayPair<Entity>::operator->() const -> const Entity* {
 	return &entity;
 }
+
+namespace std {
+	template<typename Entity>
+	struct hash<EntityArrayId<Entity>> {
+		using argument_type = EntityArrayId<Entity>;
+		using result_type = size_t;
+
+		result_type operator ()(const argument_type& key) const {
+			return std::hash<i32>()(key.index()) * std::hash<i32>()(key.index());
+		}
+	};
+
+}

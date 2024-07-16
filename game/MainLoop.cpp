@@ -48,12 +48,14 @@ void MainLoop::update() {
 			simulation.reset();
 			simulation.simulationSettings = editor.simulationSettings;
 
+			editorRigidBodyIdToPhysicsId.clear();
 			for (auto body : editor.rigidBodies) {
 
 				b2BodyDef bodyDef = b2DefaultBodyDef();
-				
 				bodyDef.type = body->isStatic ? b2_staticBody : b2_dynamicBody;
+
 				b2BodyId bodyId = b2CreateBody(simulation.world, &bodyDef);
+				editorRigidBodyIdToPhysicsId.insert({ body.id, bodyId });
 
 				b2ShapeDef shapeDef = b2DefaultShapeDef();
 				shapeDef.density = 1.0f;
@@ -143,6 +145,19 @@ void MainLoop::update() {
 
 				}
 
+			}
+
+			for (const auto& emitter : editor.emitters) {
+				const auto physicsId = editorRigidBodyIdToPhysicsId.find(emitter->rigidbody);
+				if (physicsId == editorRigidBodyIdToPhysicsId.end()) {
+					CHECK_NOT_REACHED();
+					continue;
+				}
+				simulation.emitters.add(Simulation::Emitter{
+					.body = physicsId->second,
+					.positionRelativeToBody = emitter->positionRelativeToRigidBody,
+					.strength = emitter->strength
+				});
 			}
 		} else if (currentState == State::SIMULATION) {
 			currentState = State::EDITOR;

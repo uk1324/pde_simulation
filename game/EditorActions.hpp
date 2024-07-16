@@ -25,10 +25,10 @@ struct EditorActionSelectionChange {
 
 // Should this store a copy of the reflecting body or should there be a new entity create and this would just store the ids.
 struct EditorActionModifyReflectingBody {
-	EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity);
+	EditorActionModifyReflectingBody(EditorRigidBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity);
 
 	// Storing the memory inside instead of allocating it somewhere else (for example on the stack), because it adds an pointless indirection. Using a specific type instead of a generic thing, because I don't thinkg it would simplify anything. The entity cases would just need to be handled somewhere else.
-	EditorReflectingBodyId id;
+	EditorRigidBodyId id;
 	EditorRigidBody oldEntity; 
 	EditorRigidBody newEntity;
 };
@@ -74,8 +74,9 @@ struct EditorActions {
 
 	i64 actionIndexToStackStartOffset(i64 actionIndex);
 
-	void beginMulticommand();
-	void endMulticommand();
+	// returns if a multicommand actually started.
+	bool beginMulticommand();
+	void endMulticommand(bool started);
 
 	void add(Editor& editor, EditorAction&& action) noexcept;
 	void addSelectionChange(Editor& editor, const std::unordered_set<EditorEntityId>& oldSelection, const std::unordered_set<EditorEntityId>& newSelection);

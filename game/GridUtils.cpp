@@ -33,6 +33,14 @@ GridAabb aabbToClampedGridAabb(Aabb aabb, const Aabb& gridBounds, Vec2T<i64> gri
 	return GridAabb(gridClamp(Vec2T<i64>(aabb.min), gridSize), gridClamp(Vec2T<i64>(aabb.max), gridSize));
 }
 
+Vec2T<i64> positionToGridPosition(Vec2 pos, const Aabb& gridBounds, Vec2T<i64> gridSize) {
+	pos -= gridBounds.min;
+	pos /= gridBounds.size();
+	pos *= Vec2(gridSize);
+	pos = pos.applied(floor);
+	return Vec2T<i64>(pos);
+}
+
 Vec2T<i64> positionClampedToGridPosition(Vec2 pos, const Aabb& gridBounds, Vec2T<i64> gridSize) {
 	pos -= gridBounds.min;
 	pos /= gridBounds.size();

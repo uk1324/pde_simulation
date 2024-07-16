@@ -17,14 +17,21 @@ i64 EditorActions::actionIndexToStackStartOffset(i64 actionIndex) {
     return offset;
 }
 
-void EditorActions::beginMulticommand() {
-    ASSERT(!recordingMultiAction);
+bool EditorActions::beginMulticommand() {
+    // Doing the things with started allows nesting multicommands. For example a delete entity might do multiple things and then you might want to call delete entity multiple times. To delete the selected entites for example.
+    if (recordingMultiAction) {
+        return false;
+    }
     recordingMultiAction = true;
     currentMultiActionSize = 0;
+    return true;
 }
 
-void EditorActions::endMulticommand() {
+void EditorActions::endMulticommand(bool started) {
     ASSERT(recordingMultiAction);
+    if (!started) {
+        return;
+    }
     // Not asserting that the multicommand isn't empty because it allows writing easier code when adding commands in a loop over a range which can be empty.
     recordingMultiAction = false;
     if (currentMultiActionSize != 0) {
@@ -116,7 +123,7 @@ EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> ol
 EditorActionDestroyEntity::EditorActionDestroyEntity(EditorEntityId id) 
     : id(id) {}
 
-EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorReflectingBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity)
+EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorRigidBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity)
     : id(id)
     , oldEntity(oldEntity)
     , newEntity(newEntity) {}

@@ -1,5 +1,6 @@
 #include "GameRenderer.hpp"
 #include <game/Shaders/waveData.hpp>
+#include <game/Constants.hpp>
 #include <game/Shaders/gridData.hpp>
 #include <game/Shaders/waveDisplayData.hpp>
 #include <StructUtils.hpp>
@@ -37,7 +38,7 @@ void GameRenderer::drawBounds(Aabb aabb) {
 }
 
 void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected, bool isStatic) {
-	gfx.diskTriangulated(center, radius, isStatic ? Vec4(color.xyz() / 1.3f, color.w) : color);
+	gfx.diskTriangulated(center, radius, insideColor(color, isStatic));
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 	gfx.circleTriangulated(center, radius, outlineWidth(), outlineColor);
 	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), outlineWidth(), outlineColor);
@@ -51,13 +52,24 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 		tempVertices.add(Rotation(rotation) * vertex + translation);
 	}
 
-	gfx.filledTriangles(constView(tempVertices), constView(trianglesVertices), color);
+	gfx.filledTriangles(constView(tempVertices), constView(trianglesVertices), insideColor(color, isStatic));
 
 	for (i64 i = 0; i < boundaryEdges.size(); i += 2) {
 		const auto startIndex = boundaryEdges[i];
 		const auto endIndex = boundaryEdges[i + 1];
 		gfx.lineTriangulated(tempVertices[startIndex], tempVertices[endIndex], outlineWidth(), outlineColor);
 	}
+}
+
+void GameRenderer::emitter(Vec2 position, bool isPreview) {
+	gfx.diskTriangulated(position, Constants::EMITTER_DISPLAY_RADIUS, Vec4(0.0f, 1.0f, 1.0f, isPreview ? 0.3f : 0.5f));
+}
+
+void GameRenderer::emitter(Vec2 positionRelativeToBody, Vec2 bodyTranslation, f32 bodyRotation, bool isPreview) {
+	Vec2 pos = positionRelativeToBody;
+	pos *= Rotation(bodyRotation);
+	pos += bodyTranslation;
+	emitter(pos, isPreview);
 }
 
 f32 GameRenderer::outlineWidth() const {
@@ -70,6 +82,10 @@ Vec3 GameRenderer::outlineColor(Vec3 mainColor, bool isSelected) const {
 	}
 
 	return mainColor / 2.0f;
+}
+
+Vec4 GameRenderer::insideColor(Vec4 color, bool isStatic) const {
+	return isStatic ? Vec4(color.xyz() / 1.3f, color.w) : color;
 }
 
 void GameRenderer::drawGrid() {
