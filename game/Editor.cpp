@@ -538,16 +538,14 @@ void Editor::selectToolGui() {
 			}
 		}
 		if (bothRigidBody) {
-			auto entity0 = rigidBodies.get(selectedEntities.begin()->rigidBody());
-			auto entity1 = rigidBodies.get((++selectedEntities.begin())->rigidBody());
-
-			// Creating copies to prevent pointer invalidation.
-			const auto entity0Material = entity0->material;
-			const auto entity0IsStatic = entity0->isStatic;
+			const auto entity0Id = selectedEntities.begin()->rigidBody();
+			const auto entity1Id = (++selectedEntities.begin())->rigidBody();
+			auto entity0 = rigidBodies.get(entity0Id);
+			auto entity1 = rigidBodies.get(entity1Id);
 
 			if (!entity0.has_value() || !entity1.has_value()) {
 				CHECK_NOT_REACHED();
-				// TOOD:
+				// TODO:
 				return;
 			}
 			
@@ -557,107 +555,15 @@ void Editor::selectToolGui() {
 				const auto rhs = getShapePath(entity1->shape);
 
 				const auto result = Difference(lhs, rhs, FillRule::NonZero);
+				// Creating copies to prevent pointer invalidation.
+				const auto entity0Material = entity0->material;
+				const auto entity0IsStatic = entity0->isStatic;
+				createRigidBodiesFromPaths(result, entity0Material, entity0IsStatic);
 
-				std::vector<std::vector<Vec2>> polygonToTriangulate;
-
-
-				auto createRigidbody = [&](i64 mainPathIndex) -> i64 {
-					i64 polygonEndPathIndex = mainPathIndex + 1;
-					for (;;) {
-						const auto reachedEnd = polygonEndPathIndex >= result.size();
-						if (reachedEnd) {
-							break;
-						}
-						const auto newPathStarts = IsPositive(result[polygonEndPathIndex]);
-						if (newPathStarts) {
-							break;
-						}
-						polygonEndPathIndex++;
-					}
-					polygonToTriangulate.clear();
-					
-					auto polygon = createPolygonShape();
-
-					i64 vertexIndex = 0;
-					for (i64 pathI = mainPathIndex; pathI < polygonEndPathIndex; pathI++) {
-						std::vector<Vec2> pathToTriangulate;
-						for (const auto& vertex : result[pathI]) {
-							const auto v = Vec2(vertex.x, vertex.y);
-							polygon->vertices.add(v);
-							polygon->boundary.add(vertexIndex);
-							pathToTriangulate.push_back(v);
-							vertexIndex++;
-						}
-						polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
-						polygonToTriangulate.push_back(std::move(pathToTriangulate));
-					}
-					
-					const auto triangulation = mapbox::earcut(polygonToTriangulate);
-					for (const auto& index : triangulation) {
-						polygon->trianglesVertices.add(index);
-					}
-
-					createRigidBody(EditorShape(polygon.id), entity0Material, false);
-
-					return polygonEndPathIndex;
-				};
-
-				i64 pathStart = 0;
-				for (;;) {
-					pathStart = createRigidbody(pathStart);
-					if (pathStart >= result.size()) {
-						break;
-					}
-				}
-				//for (i64 pathI = 0; pathI < result.size(); pathI++) {
-				//	if (
-
-				//	std::vector<Vec2> pathToTriangulate;
-				//	for (const auto& vertex : result[pathI]) {
-				//		const auto v = Vec2(vertex.x, vertex.y);
-				//		polygon->vertices.add(v);
-				//		polygon->boundary.add(vertexIndex);
-				//		pathToTriangulate.push_back(v);
-				//		vertexIndex++;
-				//	}
-				//	polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
-
-				//	/*polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
-				//	polygonToTriangulate.push_back(std::move(pathToTriangulate));*/
-				//	
-				//	/*const auto newPathStart = IsPositive(result[pathI]);
-				//	if (!newPathStart) {
-				//		continue;
-				//	}
-				//	if (!IsPositive(result[pathI]);*/
-				//}
-
-				//for (const auto& path : result) {
-				//	if (IsPositive(path) && i != 0) {
-				//		const auto triangulation = mapbox::earcut(polygonToTriangulate);
-				//		for (const auto& index : triangulation) {
-				//			polygon->trianglesVertices.add(index);
-				//		}
-
-				//		// Creating copies to prevent pointer invalidation.
-				//		const auto shape = EditorShape(polygon.id);
-				//		const auto material = entity0->material;
-				//		createRigidBody(shape, material, false);
-				//		i = 0;
-				//		polygon = createPolygonShape();
-				//	}
-
-				//	std::vector<Vec2> pathToTriangulate;
-				//	for (const auto& vertex : path) {
-				//		const auto v = Vec2(vertex.x, vertex.y);
-				//		polygon->vertices.add(v);
-				//		polygon->boundary.add(i);
-				//		pathToTriangulate.push_back(v);
-				//		i++;
-				//	}
-				//	polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
-				//	polygonToTriangulate.push_back(std::move(pathToTriangulate));
-				//}
+				// TODO: Actions
+				destoryEntity(EditorEntityId(entity0Id));
+				destoryEntity(EditorEntityId(entity1Id));
+				selectedEntities.clear();
 			}
 		}
 	}
@@ -1439,6 +1345,61 @@ Clipper2Lib::PathsD Editor::getShapePath(const EditorShape& shape) const {
 
 	return result;
 
+}
+
+void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic) {
+	using namespace Clipper2Lib;
+
+	std::vector<std::vector<Vec2>> polygonToTriangulate;
+
+	auto createRigidBodyFromPaths = [&](i64 mainPathIndex) -> i64 {
+		i64 polygonEndPathIndex = mainPathIndex + 1;
+		for (;;) {
+			const auto reachedEnd = polygonEndPathIndex >= paths.size();
+			if (reachedEnd) {
+				break;
+			}
+			const auto newPathStarts = IsPositive(paths[polygonEndPathIndex]);
+			if (newPathStarts) {
+				break;
+			}
+			polygonEndPathIndex++;
+		}
+		polygonToTriangulate.clear();
+
+		auto polygon = createPolygonShape();
+
+		i64 vertexIndex = 0;
+		for (i64 pathI = mainPathIndex; pathI < polygonEndPathIndex; pathI++) {
+			std::vector<Vec2> pathToTriangulate;
+			for (const auto& vertex : paths[pathI]) {
+				const auto v = Vec2(vertex.x, vertex.y);
+				polygon->vertices.add(v);
+				polygon->boundary.add(vertexIndex);
+				pathToTriangulate.push_back(v);
+				vertexIndex++;
+			}
+			polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+			polygonToTriangulate.push_back(std::move(pathToTriangulate));
+		}
+
+		const auto triangulation = mapbox::earcut(polygonToTriangulate);
+		for (const auto& index : triangulation) {
+			polygon->trianglesVertices.add(index);
+		}
+
+		createRigidBody(EditorShape(polygon.id), material, isStatic);
+
+		return polygonEndPathIndex;
+	};
+
+	i64 pathStart = 0;
+	for (;;) {
+		pathStart = createRigidBodyFromPaths(pathStart);
+		if (pathStart >= paths.size()) {
+			break;
+		}
+	}
 }
 
 void Editor::createObject(EditorShape&& shape) {	

@@ -500,8 +500,8 @@ void Simulation::render(GameRenderer& renderer) {
 	};
 
 	for (const auto& object : reflectingObjects) {
-		//renderShape(object.id, object.shape, false);
-		debugRenderPolygon(object.id);
+		renderShape(object.id, object.shape, false);
+		//debugRenderPolygon(object.id);
 	}
 	renderer.gfx.drawLines();
 

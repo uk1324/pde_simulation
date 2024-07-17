@@ -33,7 +33,7 @@ struct Simulation {
 
 	b2WorldId world;
 
-	bool debugDisplay = true;
+	bool debugDisplay = false;
 
 	enum class ShapeType {
 		CIRCLE,

@@ -142,6 +142,7 @@ struct Editor {
 	bool isPointInEditorShape(const EditorShape& shape, Vec2 point) const;
 
 	Clipper2Lib::PathsD getShapePath(const EditorShape& shape) const;
+	void createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic);
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
