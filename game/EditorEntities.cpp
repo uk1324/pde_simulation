@@ -69,7 +69,7 @@ EditorPolygonShape EditorPolygonShape::make() {
 	return EditorPolygonShape{
 		.vertices = List<Vec2>::empty(),
 		.trianglesVertices = List<i32>::empty(),
-		.boundaryEdges = List<i32>::empty(),
+		.boundary = List<i32>::empty(),
 		.translation = Vec2(0.0f),
 		.rotation = 0.0f
 	};
@@ -94,20 +94,16 @@ void EditorPolygonShape::initializeFromVertices(View<const Vec2> inputVertices) 
 		trianglesVertices.add(vertexIndex);
 	}
 
-	if (vertices.size() > 2) {
-		i64 previous = vertices.size() - 1;
-		for (i64 i = 0; i < vertices.size(); i++) {
-			boundaryEdges.add(i);
-			boundaryEdges.add(previous);
-			previous = i;
-		}
+	for (i64 i = 0; i < vertices.size(); i++) {
+		boundary.add(i);
 	}
+	boundary.add(PATH_END_INDEX);
 }
 
 void EditorPolygonShape::cloneFrom(const EditorPolygonShape& other) {
 	vertices = other.vertices.clone();
 	trianglesVertices = other.trianglesVertices.clone();
-	boundaryEdges = other.boundaryEdges.clone();
+	boundary = other.boundary.clone();
 	translation = other.translation;
 	rotation = other.rotation;
 }

@@ -6,11 +6,13 @@ target_compile_features(simulation PUBLIC cxx_std_23)
 set_target_properties(simulation PROPERTIES CXX_EXTENSIONS OFF)
 
 target_include_directories(simulation PUBLIC "../" "../dependencies/box2c/include")
+target_include_directories(simulation PUBLIC "../" "../dependencies/Clipper2/CPP/Clipper2Lib/include")
 
 include("../engine/codeGenTool/targetAddGenerated.cmake")
 
 target_link_libraries(simulation PUBLIC gfx2d)
 target_link_libraries(simulation PUBLIC box2d)
+target_link_libraries(simulation PUBLIC Clipper2)
 
 target_compile_options(simulation PRIVATE /we4062)
 

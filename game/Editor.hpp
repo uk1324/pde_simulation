@@ -7,6 +7,8 @@
 #include <game/GameRenderer.hpp>
 #include <game/GameInput.hpp>
 #include <game/Gizmo.hpp>
+#include <dependencies/Clipper2/CPP/Clipper2Lib/include/clipper2/clipper.h>
+//#include <clipper2/clipper.h>
 
 struct Editor {
 	static Editor make();
@@ -138,6 +140,8 @@ struct Editor {
 	Aabb editorShapeAabb(const EditorShape& shape) const;
 	bool isEditorShapeContainedInAabb(const EditorShape& shape, const Aabb& aabb) const;
 	bool isPointInEditorShape(const EditorShape& shape, Vec2 point) const;
+
+	Clipper2Lib::PathsD getShapePath(const EditorShape& shape) const;
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();

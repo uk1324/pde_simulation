@@ -27,7 +27,8 @@ struct EditorPolygonShape {
 
 	List<Vec2> vertices;
 	List<i32> trianglesVertices;
-	List<i32> boundaryEdges;
+	static constexpr i32 PATH_END_INDEX = -1;
+	List<i32> boundary;
 	Vec2 translation;
 	f32 rotation;
 };

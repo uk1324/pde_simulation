@@ -13,6 +13,7 @@
 #include <engine/Math/Rotation.hpp>
 #include <imgui/imgui.h>
 #include <Gui.hpp>
+#include <dependencies/earcut/earcut.hpp>
 #include <imgui/imgui_internal.h>
 #include <glad/glad.h>
 
@@ -526,6 +527,140 @@ void Editor::selectToolGui() {
 	} else {
 		//actions.beginMulticommand();
 	}
+
+	if (selectedEntities.size() == 2) {
+		bool bothRigidBody = true;
+
+		for (const auto& entity : selectedEntities) {
+			if (entity.type != EditorEntityType::RIGID_BODY) {
+				bothRigidBody = false;
+				break;
+			}
+		}
+		if (bothRigidBody) {
+			auto entity0 = rigidBodies.get(selectedEntities.begin()->rigidBody());
+			auto entity1 = rigidBodies.get((++selectedEntities.begin())->rigidBody());
+
+			// Creating copies to prevent pointer invalidation.
+			const auto entity0Material = entity0->material;
+			const auto entity0IsStatic = entity0->isStatic;
+
+			if (!entity0.has_value() || !entity1.has_value()) {
+				CHECK_NOT_REACHED();
+				// TOOD:
+				return;
+			}
+			
+			if (ImGui::Button("subtract shapes")) {
+				using namespace Clipper2Lib;
+				const auto lhs = getShapePath(entity0->shape);
+				const auto rhs = getShapePath(entity1->shape);
+
+				const auto result = Difference(lhs, rhs, FillRule::NonZero);
+
+				std::vector<std::vector<Vec2>> polygonToTriangulate;
+
+
+				auto createRigidbody = [&](i64 mainPathIndex) -> i64 {
+					i64 polygonEndPathIndex = mainPathIndex + 1;
+					for (;;) {
+						const auto reachedEnd = polygonEndPathIndex >= result.size();
+						if (reachedEnd) {
+							break;
+						}
+						const auto newPathStarts = IsPositive(result[polygonEndPathIndex]);
+						if (newPathStarts) {
+							break;
+						}
+						polygonEndPathIndex++;
+					}
+					polygonToTriangulate.clear();
+					
+					auto polygon = createPolygonShape();
+
+					i64 vertexIndex = 0;
+					for (i64 pathI = mainPathIndex; pathI < polygonEndPathIndex; pathI++) {
+						std::vector<Vec2> pathToTriangulate;
+						for (const auto& vertex : result[pathI]) {
+							const auto v = Vec2(vertex.x, vertex.y);
+							polygon->vertices.add(v);
+							polygon->boundary.add(vertexIndex);
+							pathToTriangulate.push_back(v);
+							vertexIndex++;
+						}
+						polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+						polygonToTriangulate.push_back(std::move(pathToTriangulate));
+					}
+					
+					const auto triangulation = mapbox::earcut(polygonToTriangulate);
+					for (const auto& index : triangulation) {
+						polygon->trianglesVertices.add(index);
+					}
+
+					createRigidBody(EditorShape(polygon.id), entity0Material, false);
+
+					return polygonEndPathIndex;
+				};
+
+				i64 pathStart = 0;
+				for (;;) {
+					pathStart = createRigidbody(pathStart);
+					if (pathStart >= result.size()) {
+						break;
+					}
+				}
+				//for (i64 pathI = 0; pathI < result.size(); pathI++) {
+				//	if (
+
+				//	std::vector<Vec2> pathToTriangulate;
+				//	for (const auto& vertex : result[pathI]) {
+				//		const auto v = Vec2(vertex.x, vertex.y);
+				//		polygon->vertices.add(v);
+				//		polygon->boundary.add(vertexIndex);
+				//		pathToTriangulate.push_back(v);
+				//		vertexIndex++;
+				//	}
+				//	polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+
+				//	/*polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+				//	polygonToTriangulate.push_back(std::move(pathToTriangulate));*/
+				//	
+				//	/*const auto newPathStart = IsPositive(result[pathI]);
+				//	if (!newPathStart) {
+				//		continue;
+				//	}
+				//	if (!IsPositive(result[pathI]);*/
+				//}
+
+				//for (const auto& path : result) {
+				//	if (IsPositive(path) && i != 0) {
+				//		const auto triangulation = mapbox::earcut(polygonToTriangulate);
+				//		for (const auto& index : triangulation) {
+				//			polygon->trianglesVertices.add(index);
+				//		}
+
+				//		// Creating copies to prevent pointer invalidation.
+				//		const auto shape = EditorShape(polygon.id);
+				//		const auto material = entity0->material;
+				//		createRigidBody(shape, material, false);
+				//		i = 0;
+				//		polygon = createPolygonShape();
+				//	}
+
+				//	std::vector<Vec2> pathToTriangulate;
+				//	for (const auto& vertex : path) {
+				//		const auto v = Vec2(vertex.x, vertex.y);
+				//		polygon->vertices.add(v);
+				//		polygon->boundary.add(i);
+				//		pathToTriangulate.push_back(v);
+				//		i++;
+				//	}
+				//	polygon->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+				//	polygonToTriangulate.push_back(std::move(pathToTriangulate));
+				//}
+			}
+		}
+	}
 }
 
 void Editor::entityGui(EditorEntityId id) {
@@ -639,7 +774,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				CHECK_NOT_REACHED();
 				break;
 			}
-			renderer.polygon(polygon->vertices, polygon->boundaryEdges, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected, body->isStatic);
+			renderer.polygon(polygon->vertices, polygon->boundary, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected, body->isStatic);
 			break;
 		}
 
@@ -1132,11 +1267,17 @@ Vec2 Editor::shapeGetCenter(const EditorShape& shape) const {
 			break;
 		}
 		Vec2 center(0.0f);
-		for (i32 i = 0; i < polygon->boundaryEdges.size(); i++) {
-			center += polygon->vertices[polygon->boundaryEdges[i]];
+		i64 count = 0;
+		for (i32 i = 0; i < polygon->boundary.size(); i++) {
+			// TODO: 
+			if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+				break;
+			}
+			center += polygon->vertices[polygon->boundary[i]];
+			count++;
 		}
-		center /= f32(polygon->boundaryEdges.size());
-		return center += polygon->translation;
+		center /= f32(count);
+		return center + polygon->translation;
 	}
 
 	}
@@ -1150,6 +1291,7 @@ bool Editor::isPointInEditorShape(const EditorShape& shape, Vec2 point) const {
 		using enum EditorShapeType;
 	case CIRCLE:
 		return isPointInCircle(shape.circle.center, shape.circle.radius, point);
+
 	case POLYGON:
 		const auto polygon = polygonShapes.get(shape.polygon);
 		if (!polygon.has_value()) {
@@ -1157,11 +1299,16 @@ bool Editor::isPointInEditorShape(const EditorShape& shape, Vec2 point) const {
 		}
 		// @Performance
 		auto vertices = List<Vec2>::empty();
-		for (i64 i = 0; i < polygon->boundaryEdges.size(); i += 2) {
-			vertices.add(polygon->vertices[polygon->boundaryEdges[i]]);
+		for (i64 i = 0; i < polygon->boundary.size(); i++) {
+			// TODO:
+			if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+				break;
+			}
+			vertices.add(polygon->vertices[polygon->boundary[i]]);
 		}
 		return isPointInTransformedPolygon(constView(vertices), polygon->translation, polygon->rotation, point);
 	}
+
 	CHECK_NOT_REACHED();
 	return false;
 }
@@ -1252,6 +1399,46 @@ EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shap
 	body->material = material;
 	body->isStatic = isStatic;
 	return body;
+}
+
+Clipper2Lib::PathsD Editor::getShapePath(const EditorShape& shape) const {
+	using namespace Clipper2Lib;
+
+	PathsD result;
+
+	switch (shape.type) {
+		using enum EditorShapeType;
+
+	case CIRCLE: {
+		const auto& circle = shape.circle;
+		result.push_back(Ellipse(Point<f64>(circle.center.x, circle.center.y), circle.radius, circle.radius, 70));
+		break;
+	}
+
+	case POLYGON: {
+		const auto& polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			CHECK_NOT_REACHED();
+			return result;
+		}
+
+		PathD path;
+		for (i64 i = 0; i < polygon->boundary.size(); i++) {
+			if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+				result.push_back(path);
+				path.clear();
+				continue;
+			}
+			const auto& point = Rotation(polygon->rotation) * polygon->vertices[polygon->boundary[i]] + polygon->translation;
+			path.push_back(Point<f64>(point.x, point.y));
+		}
+		break;
+	}
+		
+	}
+
+	return result;
+
 }
 
 void Editor::createObject(EditorShape&& shape) {	

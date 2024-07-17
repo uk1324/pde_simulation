@@ -64,7 +64,7 @@ void MainLoop::update() {
 				// TODO: Could reuse vertices
 				auto simplifiedOutline = List<Vec2>::empty();
 				auto vertices = List<Vec2>::empty();
-				auto boundaryEdges = List<i32>::empty();
+				auto boundary = List<i32>::empty();
 				auto triangleVertices = List<i32>::empty();
 				auto shapeType = Simulation::ShapeType::CIRCLE;
 				f32 radius = 0.0f;
@@ -88,24 +88,53 @@ void MainLoop::update() {
 						break;
 					}
 					// @Performance:
-					auto simplifiedVertices = polygonDouglassPeckerSimplify(constView(polygon->vertices), 0.3f);
 					std::vector <std::vector<Vec2>> polygonToTriangulate;
-					polygonToTriangulate.push_back(std::move(simplifiedVertices));
+					std::vector<Vec2> verticesToTriangulate;
+					for (i64 i = 0; i < polygon->boundary.size(); i++) {
+						if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+							const auto simplifiedVertices = polygonDouglassPeckerSimplify(constView(verticesToTriangulate), 0.1f);
+							verticesToTriangulate.clear();
+							polygonToTriangulate.push_back(simplifiedVertices);
+
+						} else {
+							verticesToTriangulate.push_back(Vec2(polygon->vertices[polygon->boundary[i]]));
+						}
+					}
 					const auto triangulation = mapbox::earcut(polygonToTriangulate);
 
-					for (auto& vertex : polygonToTriangulate[0]) {
-						simplifiedOutline.add(vertex);
+					//for (const auto& path : polygonToTriangulate[0]) {
+					//	simplifiedOutline.add(path);
+					//	//simplifiedOutline.add(Simulation::ShapeInfo::PATH_END_VERTEX);
+					//}
+
+					for (const auto& path : polygonToTriangulate) {
+						for (const auto& vertex : path) {
+							simplifiedOutline.add(vertex);
+						}
+						simplifiedOutline.add(Simulation::ShapeInfo::PATH_END_VERTEX);
 					}
-					boundaryEdges = polygon->boundaryEdges.clone();
+					boundary = polygon->boundary.clone();
 					triangleVertices = polygon->trianglesVertices.clone();
 					vertices = polygon->vertices.clone();
+
+					auto getTriangulationVertex = [&](i64 i) -> Vec2 {
+						for (const auto& path : polygonToTriangulate) {
+							if (i < path.size()) {
+								return path[i];
+							}
+							i -= path.size();
+						}
+						CHECK_NOT_REACHED();
+						return Vec2(0.0f);
+					};
 
 					ASSERT(triangulation.size() % 3 == 0);
 					for (i64 i = 0; i < triangulation.size(); i += 3) {
 						b2Hull hull;
 						for (i64 j = 0; j < 3; j++) {
 							const auto index = triangulation[i + j];
-							hull.points[j] = fromVec2(polygonToTriangulate[0][index]);
+							//hull.points[j] = fromVec2(polygonToTriangulate[0][index]);
+							hull.points[j] = fromVec2(getTriangulationVertex(index));
 						}
 						hull.count = 3;
 						const auto polygon = b2MakePolygon(&hull, 0.0f);
@@ -121,7 +150,7 @@ void MainLoop::update() {
 					.type = shapeType,
 					.simplifiedOutline = std::move(simplifiedOutline),
 					.vertices = std::move(vertices),
-					.boundaryEdges = std::move(boundaryEdges),
+					.boundary = std::move(boundary),
 					.trianglesVertices = std::move(triangleVertices),
 					.radius = radius
 				};

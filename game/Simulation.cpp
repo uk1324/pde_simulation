@@ -20,6 +20,45 @@
 #include <glad/glad.h>
 #include <game/Constants.hpp>
 
+bool isPointInSimulationPolygon(View<const Vec2> verts, Vec2 p) {
+	bool result = false;
+	
+	i64 i = 0;
+	for (; i < verts.size(); i++) {
+		if (verts[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+			result = isPointInPolygon(View<const Vec2>(verts.data(), i), p);
+			i++;
+			break;
+		}
+	}
+
+	if (!result) {
+		return false;
+	}
+
+	i64 start = i;
+	for (; i < verts.size(); i++) {
+		if (verts[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+			if (isPointInPolygon(View<const Vec2>(verts.data() + start, i - start), p)) {
+				return false;
+			}
+			start = i + 1;
+		}
+	}
+
+	return result;
+}
+
+Aabb simulationPolygonAabb(View<const Vec2> verts, Vec2 translation, f32 rotation) {
+	for (i64 i = 0; i < verts.size(); i++) {
+		if (verts[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+			return transformedPolygonAabb(View<const Vec2>(verts.data(), i), translation, rotation);;
+		}
+	}
+	CHECK_NOT_REACHED();
+	return Aabb(Vec2(0.0f), Vec2(0.0f));
+}
+
 Simulation::Simulation()
 	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
 	, simulationSettings(SimulationSettings::makeDefault())
@@ -136,7 +175,7 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 			break; \
 		} \
 		case POLYGON: { \
-			const auto shapeAabb = transformedPolygonAabb(constView(object.shape.simplifiedOutline), position, rotation); \
+			const auto shapeAabb = simulationPolygonAabb(constView(object.shape.simplifiedOutline), position, rotation); \
 			const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize); \
 			const auto rotate = Rotation(-rotation); \
 			for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) { \
@@ -144,7 +183,7 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 					auto cellCenter = calculateCellCenter(xi, yi); \
 					cellCenter -= position; \
 					cellCenter *= rotate; \
-					if (isPointInPolygon(constView(object.shape.simplifiedOutline), cellCenter)) { \
+					if (isPointInSimulationPolygon(constView(object.shape.simplifiedOutline), cellCenter)) { \
 						TO_EXECUTE \
 					} \
 				} \
@@ -402,14 +441,69 @@ void Simulation::render(GameRenderer& renderer) {
 			break;
 
 		case POLYGON:
-			renderer.polygon(shape.vertices, shape.boundaryEdges, shape.trianglesVertices, position, rotation, color, false, isStatic);
+			renderer.polygon(shape.vertices, shape.boundary, shape.trianglesVertices, position, rotation, color, false, isStatic);
 			break;
+		}
+	};
+	renderer.gfx.drawLines();
+
+	/*for (const auto& a : reflectingObjects) {
+		const auto position = toVec2(b2Body_GetPosition(a.id));
+		f32 rotation = b2Body_GetAngle(a.id);
+		std::vector<Vec2> vs;
+		for (i64 i = 0; i < a.shape.simplifiedOutline.size(); i++) {
+			if (a.shape.simplifiedOutline[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+				break;
+			}
+			vs.push_back(Rotation(rotation) * a.shape.simplifiedOutline[i] + position);
+		}
+		renderer.gfx.polylineTriangulated(constView(vs), 0.1f, Color3::WHITE);
+	}*/
+
+	auto debugRenderPolygon = [this, &renderer](b2BodyId id) {
+		const auto position = toVec2(b2Body_GetPosition(id));
+		f32 rotation = b2Body_GetAngle(id);
+
+		getShapes(id);
+		for (auto& shape : getShapesResult) {
+			auto type = b2Shape_GetType(shape);
+			switch (type) {
+			case b2_polygonShape: {
+				const auto rotate = Rotation(rotation);
+				const auto polygon = b2Shape_GetPolygon(shape);
+
+				auto transform = [&](Vec2 v) -> Vec2 {
+					v *= rotate;
+					v += position;
+					return v;
+				};
+
+				i64 previous = polygon.count - 1;
+				for (i64 i = 0; i < polygon.count; i++) {
+					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
+					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
+					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
+					previous = i;
+				}
+				break;
+			}
+
+			case b2_circleShape:
+			case b2_capsuleShape:
+			case b2_segmentShape:
+			case b2_smoothSegmentShape:
+			case b2_shapeTypeCount:
+				ASSERT_NOT_REACHED();
+				break;
+			}
 		}
 	};
 
 	for (const auto& object : reflectingObjects) {
-		renderShape(object.id, object.shape, false);
+		//renderShape(object.id, object.shape, false);
+		debugRenderPolygon(object.id);
 	}
+	renderer.gfx.drawLines();
 
 	for (const auto& object : transmissiveObjects) {
 		renderShape(object.id, object.shape, true);

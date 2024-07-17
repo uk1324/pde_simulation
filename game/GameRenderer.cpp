@@ -1,5 +1,6 @@
 #include "GameRenderer.hpp"
 #include <game/Shaders/waveData.hpp>
+#include <game/EditorEntities.hpp>
 #include <game/Constants.hpp>
 #include <game/Shaders/gridData.hpp>
 #include <game/Shaders/waveDisplayData.hpp>
@@ -44,7 +45,7 @@ void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isS
 	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), outlineWidth(), outlineColor);
 } 
 
-void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundaryEdges, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected, bool isStatic) {
+void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected, bool isStatic) {
 	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 
 	tempVertices.clear();
@@ -54,10 +55,19 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 
 	gfx.filledTriangles(constView(tempVertices), constView(trianglesVertices), insideColor(color, isStatic));
 
-	for (i64 i = 0; i < boundaryEdges.size(); i += 2) {
-		const auto startIndex = boundaryEdges[i];
-		const auto endIndex = boundaryEdges[i + 1];
-		gfx.lineTriangulated(tempVertices[startIndex], tempVertices[endIndex], outlineWidth(), outlineColor);
+	if (boundary.size() > 1) {
+		i32 startVertex = boundary[0];
+		for (i64 i = 0; i < boundary.size(); i++) {
+			if (boundary[i + 1] == EditorPolygonShape::PATH_END_INDEX) {
+				gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[startVertex], outlineWidth(), outlineColor);
+				startVertex = i + 1;
+				if (i == boundary.size() - 2) {
+					break;
+				}
+				continue;
+			}
+			gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[boundary[i + 1]], outlineWidth(), outlineColor);
+		}
 	}
 }
 

@@ -33,7 +33,7 @@ struct Simulation {
 
 	b2WorldId world;
 
-	bool debugDisplay = false;
+	bool debugDisplay = true;
 
 	enum class ShapeType {
 		CIRCLE,
@@ -44,9 +44,10 @@ struct Simulation {
 		ShapeType type;
 		List<Vec2> simplifiedOutline;
 		List<Vec2> vertices;
-		List<i32> boundaryEdges;
+		List<i32> boundary;
 		List<i32> trianglesVertices;
 		f32 radius;
+		static constexpr Vec2 PATH_END_VERTEX = Vec2(-FLT_MIN, FLT_MAX);
 	};
 
 	struct ReflectingObject {
