@@ -27,8 +27,13 @@ struct EditorPolygonShape {
 
 	List<Vec2> vertices;
 	List<i32> trianglesVertices;
+
 	static constexpr i32 PATH_END_INDEX = -1;
+	// Paths are separted using PATH_END_INDEX
+	// The first path of vertices is the main shape the later ones are holes.
+	// The first path is counter clockwise the other ones are clockwise.
 	List<i32> boundary;
+
 	Vec2 translation;
 	f32 rotation;
 };

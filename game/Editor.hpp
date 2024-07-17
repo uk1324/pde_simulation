@@ -37,6 +37,7 @@ struct Editor {
 		CIRCLE,
 		POLYGON,
 		EMMITER,
+		SHAPE_DIFFERENCE
 	};
 	ToolType selectedTool = ToolType::CIRCLE;
 
@@ -84,6 +85,13 @@ struct Editor {
 	f32 emitterPhaseOffsetSetting = 0.0f;
 
 	void emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset);
+
+	struct ShapeDifferenceTool {
+		std::optional<EditorRigidBodyId> selectedRhs;
+		std::optional<EditorRigidBodyId> selectedLhs;
+
+	} shapeDifferenceTool;
+	void shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown);
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;

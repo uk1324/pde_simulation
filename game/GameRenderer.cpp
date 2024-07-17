@@ -38,16 +38,13 @@ void GameRenderer::drawBounds(Aabb aabb) {
 	gfx.drawLines();
 }
 
-void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, bool isSelected, bool isStatic) {
+void GameRenderer::disk(Vec2 center, f32 radius, f32 angle, Vec4 color, Vec3 outlineColor, bool isStatic) {
 	gfx.diskTriangulated(center, radius, insideColor(color, isStatic));
-	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
 	gfx.circleTriangulated(center, radius, outlineWidth(), outlineColor);
 	gfx.lineTriangulated(center, center + Vec2::fromPolar(angle, radius - outlineWidth() / 2.0f), outlineWidth(), outlineColor);
 } 
 
-void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, bool isSelected, bool isStatic) {
-	const auto outlineColor = this->outlineColor(color.xyz(), isSelected);
-
+void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary, const List<i32>& trianglesVertices, Vec2 translation, f32 rotation, Vec4 color, Vec3 outlineColor, bool isStatic) {
 	tempVertices.clear();
 	for (const auto& vertex : vertices) {
 		tempVertices.add(Rotation(rotation) * vertex + translation);

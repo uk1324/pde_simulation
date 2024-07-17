@@ -102,11 +102,6 @@ void MainLoop::update() {
 					}
 					const auto triangulation = mapbox::earcut(polygonToTriangulate);
 
-					//for (const auto& path : polygonToTriangulate[0]) {
-					//	simplifiedOutline.add(path);
-					//	//simplifiedOutline.add(Simulation::ShapeInfo::PATH_END_VERTEX);
-					//}
-
 					for (const auto& path : polygonToTriangulate) {
 						for (const auto& vertex : path) {
 							simplifiedOutline.add(vertex);

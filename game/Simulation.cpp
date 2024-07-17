@@ -437,11 +437,11 @@ void Simulation::render(GameRenderer& renderer) {
 		switch (shape.type) {
 			using enum ShapeType;
 		case CIRCLE:
-			renderer.disk(position, shape.radius, rotation, color, false, isStatic);
+			renderer.disk(position, shape.radius, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
 			break;
 
 		case POLYGON:
-			renderer.polygon(shape.vertices, shape.boundary, shape.trianglesVertices, position, rotation, color, false, isStatic);
+			renderer.polygon(shape.vertices, shape.boundary, shape.trianglesVertices, position, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
 			break;
 		}
 	};

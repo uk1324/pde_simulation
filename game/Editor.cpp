@@ -118,7 +118,14 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 			}
 			break;
 		}
+		break;
 	}
+
+	case SHAPE_DIFFERENCE: {
+		shapeDifferenceToolUpdate(input.cursorPos, input.cursorLeftDown, input.cursorRightDown, Input::isKeyDown(KeyCode::LEFT_SHIFT));
+		break;
+	}
+
 
 	}
 
@@ -456,10 +463,11 @@ void Editor::gui() {
 		};
 
 		const ToolDisplay tools[]{
-			{ ToolType::SELECT, "select", "" },
-			{ ToolType::CIRCLE, "circle", "" },
+			{ ToolType::SELECT, "select", nullptr },
+			{ ToolType::CIRCLE, "circle", nullptr },
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
+			{ ToolType::SHAPE_DIFFERENCE, "shape difference", "Select shape to subtract from using left click and shape to subtract using right click. Press shift to apply."},
 		};
 
 		ImGui::SeparatorText("tool");
@@ -470,7 +478,9 @@ void Editor::gui() {
 			if (ImGui::Selectable(tool.name, tool.type == selectedTool)) {
 				selectedTool = tool.type;
 			}
-			ImGui::SetItemTooltip(tool.tooltip);
+			if (tool.tooltip != nullptr) {
+				ImGui::SetItemTooltip(tool.tooltip);
+			}
 		}
 
 		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
@@ -502,6 +512,10 @@ void Editor::gui() {
 			}
 			Gui::popPropertyEditor();
 			break;
+
+		case SHAPE_DIFFERENCE:
+			break;
+
 		}
 
 	}
@@ -526,46 +540,6 @@ void Editor::selectToolGui() {
 		entityGui(id);
 	} else {
 		//actions.beginMulticommand();
-	}
-
-	if (selectedEntities.size() == 2) {
-		bool bothRigidBody = true;
-
-		for (const auto& entity : selectedEntities) {
-			if (entity.type != EditorEntityType::RIGID_BODY) {
-				bothRigidBody = false;
-				break;
-			}
-		}
-		if (bothRigidBody) {
-			const auto entity0Id = selectedEntities.begin()->rigidBody();
-			const auto entity1Id = (++selectedEntities.begin())->rigidBody();
-			auto entity0 = rigidBodies.get(entity0Id);
-			auto entity1 = rigidBodies.get(entity1Id);
-
-			if (!entity0.has_value() || !entity1.has_value()) {
-				CHECK_NOT_REACHED();
-				// TODO:
-				return;
-			}
-			
-			if (ImGui::Button("subtract shapes")) {
-				using namespace Clipper2Lib;
-				const auto lhs = getShapePath(entity0->shape);
-				const auto rhs = getShapePath(entity1->shape);
-
-				const auto result = Difference(lhs, rhs, FillRule::NonZero);
-				// Creating copies to prevent pointer invalidation.
-				const auto entity0Material = entity0->material;
-				const auto entity0IsStatic = entity0->isStatic;
-				createRigidBodiesFromPaths(result, entity0Material, entity0IsStatic);
-
-				// TODO: Actions
-				destoryEntity(EditorEntityId(entity0Id));
-				destoryEntity(EditorEntityId(entity1Id));
-				selectedEntities.clear();
-			}
-		}
 	}
 }
 
@@ -593,7 +567,6 @@ void Editor::entityGui(EditorEntityId id) {
 
 		//ImGui::SeparatorText("material");
 		// TODO: What to do when switched into a material type that has additional data. Default initialize?
-
 
 		ImGui::SeparatorText("shape");
 		if (beginPropertyEditor("rigidBodyShape")) {
@@ -665,12 +638,20 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	for (const auto& body : rigidBodies) {
 		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(body.id));
 		const auto color = materialTypeToColor(body->material.type, GameRenderer::defaultColor);
+		Vec3 outlineColor = renderer.outlineColor(color.xyz(), isSelected);
+		if (selectedTool == ToolType::SHAPE_DIFFERENCE) {
+			if (body.id == shapeDifferenceTool.selectedLhs) {
+				outlineColor = Color3::GREEN;
+			} else if (body.id == shapeDifferenceTool.selectedRhs) {
+				outlineColor = Color3::CYAN;
+			}
+		}
 
 		switch (body->shape.type) {
 			using enum EditorShapeType;
 		case CIRCLE: {
 			const auto circle = body->shape.circle;
-			renderer.disk(circle.center, circle.radius, circle.angle, color, isSelected, body->isStatic);
+			renderer.disk(circle.center, circle.radius, circle.angle, color, outlineColor, body->isStatic);
 			break;
 		}
 
@@ -680,7 +661,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 				CHECK_NOT_REACHED();
 				break;
 			}
-			renderer.polygon(polygon->vertices, polygon->boundary, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, isSelected, body->isStatic);
+			renderer.polygon(polygon->vertices, polygon->boundary, polygon->trianglesVertices, polygon->translation, polygon->rotation, color, outlineColor, body->isStatic);
 			break;
 		}
 
@@ -740,7 +721,11 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 			renderer.emitter(input.cursorPos, true);
 			renderer.gfx.drawFilledTriangles();
 		}
+		break;
 	}
+
+	case SHAPE_DIFFERENCE:
+		break;
 
 	}
 
@@ -943,6 +928,60 @@ Vec2 Editor::selectedEntitiesCenter() {
 	center /= count;
 
 	return center;
+}
+
+void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown) {
+	std::optional<EditorRigidBodyId> rigidBodyUnderCursor;
+	for (auto body : rigidBodies) {
+		if (isPointInEditorShape(body->shape, cursorPos)) {
+			rigidBodyUnderCursor = body.id;
+		}
+	}
+
+	if (cursorLeftDown && rigidBodyUnderCursor.has_value()) {
+		if (*rigidBodyUnderCursor == shapeDifferenceTool.selectedRhs) {
+			shapeDifferenceTool.selectedRhs = std::nullopt;
+		}
+		shapeDifferenceTool.selectedLhs = *rigidBodyUnderCursor;
+	} else if (cursorRightDown && rigidBodyUnderCursor.has_value()) {
+		if (*rigidBodyUnderCursor == shapeDifferenceTool.selectedLhs) {
+			shapeDifferenceTool.selectedLhs = std::nullopt;
+		}
+		shapeDifferenceTool.selectedRhs = *rigidBodyUnderCursor;
+	}
+
+	if (cursorLeftDown && !rigidBodyUnderCursor.has_value()) {
+		shapeDifferenceTool.selectedLhs = std::nullopt;
+	}
+	if (cursorRightDown && !rigidBodyUnderCursor.has_value()) {
+		shapeDifferenceTool.selectedRhs = std::nullopt;
+	}
+
+
+	if (applyDown && shapeDifferenceTool.selectedLhs.has_value() && shapeDifferenceTool.selectedRhs) {
+		auto bodyLhs = rigidBodies.get(*shapeDifferenceTool.selectedLhs);
+		auto bodyRhs = rigidBodies.get(*shapeDifferenceTool.selectedRhs);
+
+		if (!bodyLhs.has_value() || !bodyRhs.has_value()) {
+			shapeDifferenceTool.selectedRhs = std::nullopt;
+			shapeDifferenceTool.selectedLhs = std::nullopt;
+			return;
+		}
+		const auto lhs = getShapePath(bodyLhs->shape);
+		const auto rhs = getShapePath(bodyRhs->shape);
+
+		const auto result = Clipper2Lib::Difference(lhs, rhs, Clipper2Lib::FillRule::NonZero);
+		// Creating copies to prevent pointer invalidation.
+		const auto entity0Material = bodyLhs->material;
+		const auto entity0IsStatic = bodyLhs->isStatic;
+		createRigidBodiesFromPaths(result, entity0Material, entity0IsStatic);
+
+		// TODO: Actions
+		destoryEntity(EditorEntityId(*shapeDifferenceTool.selectedLhs));
+		destoryEntity(EditorEntityId(*shapeDifferenceTool.selectedRhs));
+		shapeDifferenceTool.selectedLhs = std::nullopt;
+		shapeDifferenceTool.selectedRhs = std::nullopt;
+	}
 }
 
 void Editor::rigidBodyGui() {
@@ -1432,7 +1471,7 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 
 void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
 	if (center.has_value()) {
-		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, false, isStaticSetting);
+		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, renderer.outlineColor(color.xyz(), false), isStaticSetting);
 	}
 }
 
