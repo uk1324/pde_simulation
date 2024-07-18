@@ -17,6 +17,8 @@
 #include <imgui/imgui_internal.h>
 #include <glad/glad.h>
 
+const auto ELLIPSE_SAMPLE_POINTS = 70;
+
 Editor Editor::make() {
 	Editor editor{
 		.polygonTool = PolygonTool::make(),
@@ -85,13 +87,27 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 				break;
 			}
 			auto shape = createPolygonShape();
-			shape->initializeFromVertices(constView(*outline));
+			shape->initializeFromSimplePolygon(constView(*outline));
 			polygonTool.vertices.clear();
 			createObject(EditorShape(shape.id));
 		}
 		break;
 	}
 		
+	case ELLIPSE: {
+		const auto ellipse = ellipseTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
+		if (ellipse.has_value()) {
+			// @Performance
+			auto shape = createPolygonShape();
+			auto vertices = List<Vec2>::uninitialized(ELLIPSE_SAMPLE_POINTS);
+			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
+				vertices[i] = ellipse->sample(i, ELLIPSE_SAMPLE_POINTS);
+			}
+			shape->initializeFromSimplePolygon(constView(vertices));
+			createObject(EditorShape(shape.id));
+		}
+		break;
+	}
 	
 	case EMMITER: {
 		for (const auto& body : rigidBodies) {
@@ -351,10 +367,10 @@ void Editor::gui() {
 	}
 	bool openHelpWindow = false;
 	if (ImGui::BeginMainMenuBar()) {
-		if (ImGui::BeginMenu("project")) {
-			if (ImGui::MenuItem("new")) {
+		if (ImGui::BeginMenu("cursor snap")) {
+			/*if (ImGui::MenuItem("new")) {
 
-			}
+			}*/
 			ImGui::EndMenu();
 		}
 		
@@ -464,8 +480,9 @@ void Editor::gui() {
 
 		const ToolDisplay tools[]{
 			{ ToolType::SELECT, "select", nullptr },
-			{ ToolType::CIRCLE, "circle", nullptr },
+			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius"},
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
 			{ ToolType::SHAPE_DIFFERENCE, "shape difference", "Select shape to subtract from using left click and shape to subtract using right click. Press shift to apply."},
 		};
@@ -502,6 +519,10 @@ void Editor::gui() {
 			break;
 
 		case CIRCLE:
+			rigidBodyGui();
+			break;
+
+		case ELLIPSE:
 			rigidBodyGui();
 			break;
 
@@ -693,7 +714,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 		
-	
+	case ELLIPSE: {
+		ellipseTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
+		renderer.gfx.drawFilledTriangles();
+		break;
+	}
+
 	case SELECT: {
 		if (selectedEntities.size() > 0) {
 			const auto center = selectedEntitiesCenter();
@@ -1494,6 +1520,75 @@ void Editor::PolygonTool::invalidShapeModalGui() {
 	ImGui::EndPopup();
 }
 
+std::optional<ParametricEllipse> Editor::EllipseTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
+	if (cursorRightDown) {
+		focus0 = std::nullopt;
+		focus1 = std::nullopt;
+		return std::nullopt;
+	}
+
+	if (!cursorLeftDown) {
+		return std::nullopt;
+	}
+
+	if (!focus0.has_value()) {
+		focus0 = cursorPos;
+		return std::nullopt;
+	}
+
+	if (!focus1.has_value()) {
+		focus1 = cursorPos;
+		return std::nullopt;
+	}
+
+	const auto ellipse = ParametricEllipse::fromFociAndPointOnEllipse(*focus0, *focus1, cursorPos);
+	focus0 = std::nullopt;
+	focus1 = std::nullopt;
+
+	const auto epsilon = 0.001f;
+	if (ellipse.radius0 < epsilon || ellipse.radius1 < epsilon) {
+		// TODO: Maybe display error.
+		return std::nullopt;
+	}
+	return ellipse;
+}
+
+void Editor::EllipseTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	if (focus0.has_value() && focus1.has_value()) {
+		const auto ellipse = ParametricEllipse::fromFociAndPointOnEllipse(*focus0, *focus1, cursorPos);
+
+		{
+			const auto center = renderer.gfx.addFilledTriangleVertex(ellipse.center, color);
+			auto previous = renderer.gfx.addFilledTriangleVertex(ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS), color);
+			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
+				const auto current = renderer.gfx.addFilledTriangleVertex(ellipse.sample(i, ELLIPSE_SAMPLE_POINTS), color);
+				renderer.gfx.addFilledTriangle(center, previous, current);
+				previous = current;
+			}
+		}
+
+		{
+			const auto outlineColor = renderer.outlineColor(color.xyz(), false);
+			auto previous = ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS);
+			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
+				const auto pos = ellipse.sample(i, ELLIPSE_SAMPLE_POINTS);
+				renderer.gfx.lineTriangulated(pos, previous, renderer.outlineWidth(), outlineColor);
+				previous = pos;
+			}
+			/*renderer.gfx.lineTriangulated(*focus0, cursorPos, renderer.outlineWidth(), outlineColor);
+			renderer.gfx.lineTriangulated(*focus1, cursorPos, renderer.outlineWidth(), outlineColor);*/
+		}
+
+	}
+
+	if (focus0.has_value()) {
+		renderer.gfx.diskTriangulated(*focus0, renderer.outlineWidth(), Vec4(Color3::WHITE, 1.0f));
+	}
+
+	if (focus1.has_value()) {
+		renderer.gfx.diskTriangulated(*focus1, renderer.outlineWidth(), Vec4(Color3::WHITE, 1.0f));
+	}
+}
 
 Editor::PolygonTool Editor::PolygonTool::make() {
 	return PolygonTool{

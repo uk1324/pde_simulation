@@ -75,7 +75,7 @@ EditorPolygonShape EditorPolygonShape::make() {
 	};
 }
 
-void EditorPolygonShape::initializeFromVertices(View<const Vec2> inputVertices) {
+void EditorPolygonShape::initializeFromSimplePolygon(View<const Vec2> inputVertices) {
 	vertices.clear();
 	for (const auto& v : inputVertices) {
 		vertices.add(v);

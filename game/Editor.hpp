@@ -6,6 +6,7 @@
 #include <game/EditorActions.hpp>
 #include <game/GameRenderer.hpp>
 #include <game/GameInput.hpp>
+#include <game/ParametricEllipse.hpp>
 #include <game/Gizmo.hpp>
 #include <dependencies/Clipper2/CPP/Clipper2Lib/include/clipper2/clipper.h>
 //#include <clipper2/clipper.h>
@@ -36,6 +37,7 @@ struct Editor {
 		SELECT,
 		CIRCLE,
 		POLYGON,
+		ELLIPSE,
 		EMMITER,
 		SHAPE_DIFFERENCE
 	};
@@ -59,6 +61,13 @@ struct Editor {
 		bool drawing;
 		List<Vec2> vertices;
 	} polygonTool;
+
+	struct EllipseTool {
+		std::optional<Vec2> focus0;
+		std::optional<Vec2> focus1;
+		std::optional<ParametricEllipse> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
+		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
+	} ellipseTool;
 
 	struct EmitterTool {
 		static EmitterTool make();

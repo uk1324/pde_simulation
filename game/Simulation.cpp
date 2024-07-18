@@ -115,13 +115,13 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	auto gridBounds = displayGridBounds();
 
 	const auto cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace();
-	const auto cursorDisplayGridPos = positionToGridPositionInGrid(cursorPos, gridBounds, simulationGridSize);
+	const auto cursorDisplayGridPos = positionToGridPositionInGrid(cursorPos, simulationGridBounds(), displayGrid.size());
 	std::optional<Vec2T<i64>> cursorSimulationGridPos;
 	if (cursorDisplayGridPos.has_value()) {
 		cursorSimulationGridPos = *cursorDisplayGridPos + Vec2T<i64>(1);
 	}
 	if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
+		fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
 	}
 
 	for (const auto& emitter : emitters) {

@@ -22,7 +22,7 @@ struct EditorPolygonShape {
 
 	static EditorPolygonShape make();
 
-	void initializeFromVertices(View<const Vec2> inputVertices);
+	void initializeFromSimplePolygon(View<const Vec2> inputVertices);
 	void cloneFrom(const EditorPolygonShape& other);
 
 	List<Vec2> vertices;
