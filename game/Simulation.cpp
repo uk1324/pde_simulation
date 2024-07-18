@@ -59,6 +59,8 @@ Aabb simulationPolygonAabb(View<const Vec2> verts, Vec2 translation, f32 rotatio
 	return Aabb(Vec2(0.0f), Vec2(0.0f));
 }
 
+#include <game/Demos/WaveEquationDemo..hpp>
+
 Simulation::Simulation()
 	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
 	, simulationSettings(SimulationSettings::makeDefault())
@@ -78,6 +80,8 @@ Simulation::Simulation()
 	, getShapesResult(List<b2ShapeId>::empty())
 	, realtimeDt(1.0f / 60.0f)
 	, simulationElapsed(0.0f) {
+
+	//runWaveEquationDemo();
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -112,6 +116,9 @@ Simulation::Simulation()
 }
 
 void Simulation::update(GameRenderer& renderer, const GameInput& input) {
+	const auto simulationDt = realtimeDt * simulationSettings.timeScale;
+	simulationElapsed += simulationDt;
+
 	auto gridBounds = displayGridBounds();
 
 	const auto cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace();
@@ -120,9 +127,94 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	if (cursorDisplayGridPos.has_value()) {
 		cursorSimulationGridPos = *cursorDisplayGridPos + Vec2T<i64>(1);
 	}
+	// Could add option to change to mouse button down
 	if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-		fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
+		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
+		//fillCircle(u_t, *cursorSimulationGridPos, 5, 100.0f);
 	}
+
+	// line segment wave
+	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonDown(MouseButton::RIGHT)) {
+	//	f32 xi = 60;
+	//	i64 off = 120;
+	//	for (i64 yi = 0; yi < 40; yi++) {
+	//		const auto y = yi + off;
+	//		const auto v = 25.0f;
+	//		u(xi, y) = v;
+
+	//		// This is just the derivative of the two states
+	//		// t0: 0 0 v 0 0
+	//		// t1: 0 0 0 v 0
+
+	//		// Central differencce
+	//		/*u_t(xi - 1, y) = -v / (2.0f * simulationDt);
+	//		u_t(xi, y) = 0.0f;
+	//		u_t(xi + 1, y) = v / (2.0f * simulationDt);*/
+
+	//		// Forward difference
+	//		u_t(xi, y) = -v / simulationDt;
+	//		u_t(xi + 1, y) = v / simulationDt;
+	//	}
+	//}
+
+	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonDown(MouseButton::RIGHT)) {
+	//	f32 xi = 60;
+	//	i64 off = 120;
+	//	for (i64 yi = 0; yi < 40; yi++) {
+	//		for (i64 xi = 0; xi < 40; xi++) {
+	//			auto t = xi / 40;
+	//			t -= 0.5;
+	//			t *= 2.0f;
+
+	//			const auto y = yi + off;
+	//			const auto x = xi + 50;
+	//			u(x, y) = exp(-1.0f / (1.0f - t * t)) * 15.0f;
+	//			u_t(x, y) = -2.0f * t * exp(-1.0f / (1.0f - t * t)) / pow((t * t - 1), 2.0f) * 100.0f;
+	//			/*u(xi + 1, y) = 0.0f;
+	//			u(xi - 1, y) = 0.0f;*/
+	//		}
+	//	}
+	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
+	//}
+
+	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
+	//	f32 xi = 60;
+	//	i64 off = 120;
+	//	for (i64 yi = 0; yi < 40; yi++) {
+	//		const auto y = yi + off;
+	//		u(xi, y) = 25.0f;
+	//		/*u(xi + 1, y) = 0.0f;
+	//		u(xi - 1, y) = 0.0f;*/
+
+	//		u_t(xi, y) = 0.0f;
+	//		u_t(xi + 1, y) = 210.0f;
+	//		u_t(xi - 1, y) = -210.0f;
+	//		u_t(xi + 2, y) = 0.0f;
+	//		u_t(xi - 2, y) = 0.0f;
+	//	}
+	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
+	//}
+	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonUp(MouseButton::RIGHT)) {
+	//	f32 xi = 60;
+	//	i64 off = 80;
+	//	for (i64 yi = 0; yi < 40; yi++) {
+	//		const auto y = yi + off;
+	//		/*u_t(xi, y) = 205.0f;
+	//		u_t(xi + 1, y) = -105.0f;*/
+
+	//		/*u(xi - 1, y) = 0.0f;*/
+	//		/*u(xi, y) = 0.0f;
+	//		u(xi + 1, y) = 0.0f;
+	//		u(xi + 2, y) = 0.0f;*/
+	//		//u(xi - 1, y) = -9.0f;
+	//		//u(xi + 2, y) = -5.0f; 
+	//		//u(xi, y) = -10.0f;
+	//		//u(xi -1, y) = -9.0f;
+	//		//u(xi + 1, y) = 10.0f;
+	//		////u(xi + 2, y) = -5.0f; 
+	//	}
+	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
+	//}
 
 	for (const auto& emitter : emitters) {
 		if (emitter.activateOn.has_value() && !inputButtonIsHeld(*emitter.activateOn)) {
@@ -147,9 +239,6 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	cameraMovement(camera, input, realtimeDt);
 	
 	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
-	
-	const auto simulationDt = realtimeDt * simulationSettings.timeScale;
-	simulationElapsed += simulationDt;
 
 	b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
@@ -367,6 +456,7 @@ void Simulation::render(GameRenderer& renderer) {
 				const auto min = -5.0f;
 				const auto max = 5.0f;
 				displayGridTemp(displayXi, displayYi) = (u(simulationXi, simulationYi) - min) / (max - min);
+				//displayGridTemp(displayXi, displayYi) = (u_t(simulationXi, simulationYi) - min) / (max - min);
 			}
 		}
 

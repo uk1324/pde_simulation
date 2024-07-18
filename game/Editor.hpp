@@ -37,6 +37,7 @@ struct Editor {
 		SELECT,
 		CIRCLE,
 		POLYGON,
+		RECTANGLE,
 		ELLIPSE,
 		EMMITER,
 		SHAPE_DIFFERENCE
@@ -61,6 +62,13 @@ struct Editor {
 		bool drawing;
 		List<Vec2> vertices;
 	} polygonTool;
+
+	struct RectangleTool {
+		std::optional<Vec2> corner;
+
+		std::optional<Aabb> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
+		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
+	} rectangleTool;
 
 	struct EllipseTool {
 		std::optional<Vec2> focus0;

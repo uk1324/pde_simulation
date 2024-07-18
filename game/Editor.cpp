@@ -1,6 +1,7 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
 #include <engine/Input/InputUtils.hpp>
+#include <game/ShapeVertices.hpp>
 #include <game/InputButton.hpp>
 #include <game/RelativePositions.hpp>
 #include <engine/Math/ComplexPolygonOutline.hpp>
@@ -94,6 +95,18 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 		
+	case RECTANGLE: {
+		const auto aabb = rectangleTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
+		if (aabb.has_value()) {
+			auto shape = createPolygonShape();
+			const auto vertices = aabbVertices(*aabb);
+			shape->initializeFromSimplePolygon(constView(vertices));
+			createObject(EditorShape(shape.id));
+		}
+		break;
+	}
+		
+
 	case ELLIPSE: {
 		const auto ellipse = ellipseTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
 		if (ellipse.has_value()) {
@@ -482,6 +495,7 @@ void Editor::gui() {
 			{ ToolType::SELECT, "select", nullptr },
 			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius"},
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
 			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
 			{ ToolType::SHAPE_DIFFERENCE, "shape difference", "Select shape to subtract from using left click and shape to subtract using right click. Press shift to apply."},
@@ -515,6 +529,10 @@ void Editor::gui() {
 			break;
 
 		case POLYGON:
+			rigidBodyGui();
+			break;
+
+		case RECTANGLE:
 			rigidBodyGui();
 			break;
 
@@ -714,6 +732,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 		
+	case RECTANGLE: {
+		rectangleTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
+		renderer.gfx.drawFilledTriangles();
+		break;
+	}
+
 	case ELLIPSE: {
 		ellipseTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
@@ -1644,6 +1668,43 @@ std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 
 	}
 
 	return box;
+}
+
+std::optional<Aabb> Editor::RectangleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
+	if (cursorRightDown) {
+		corner = std::nullopt;
+		return std::nullopt;
+	}
+
+	if (!cursorLeftDown) {
+		return std::nullopt;
+	}
+
+	if (!corner.has_value()) {
+		corner = cursorPos;
+		return std::nullopt;
+	}
+
+	const auto aabb = Aabb::fromCorners(cursorPos, *corner);
+	corner = std::nullopt;
+	if (aabb.area() < 0.001f) {
+		return std::nullopt;
+	}
+	return aabb;
+}
+
+void Editor::RectangleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	if (!corner.has_value()) {
+		return;
+	}
+	const auto vertices = aabbVertices(Aabb::fromCorners(*corner, cursorPos));
+	i32 indices[4]{};
+	for (i64 i = 0; i < vertices.size(); i++) {
+		indices[i] = renderer.gfx.addFilledTriangleVertex(vertices[i], color);
+	}
+	renderer.gfx.addFilledTriangle(indices[0], indices[1], indices[2]);
+	renderer.gfx.addFilledTriangle(indices[0], indices[2], indices[3]);
+	renderer.gfx.polygonTriangulated(constView(vertices), renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
 }
 
 Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)

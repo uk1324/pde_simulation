@@ -11,3 +11,5 @@ We also mention the digital waveguide methods for the solution of the wave equat
 /*
 
 */
+
+void runWaveEquationDemo();

@@ -8,3 +8,30 @@ https://cs.stackexchange.com/questions/59917/repeated-point-in-polygon-preproces
 Also maybe because I check points on a grid consecutively this could be implemeted faster.
 Maybe just some rendering algorithm could be used.
 https://www.gamedev.net/reference/articles/article367.asp (haven't read yet)
+
+Conic sections
+Boolean operations tool
+Simplify multicommand
+
+Line segment emitter. Laplacian is an edge detector.
+https://www.math.uchicago.edu/~luis/pde/wave.html
+
+What happens if the derivative at boundary is set to zero?
+
+Velocity display.
+
+If you visualize the absorbing boundary conditions with the velocity display then you can see the velocity reflecting.
+Maybe calculate u directly instead of calculating u_t. Don't know if that will actually change anything.
+
+The reflecting boundary conditions just simulate a zero speed of light on the side of the refleting material. I think not sure.
+
+https://physics.stackexchange.com/questions/275006/physical-interpretation-of-neumann-boundary-conditions-for-wave-equation-on-a-di
+
+Chladni Patterns on arbitrary boundary
+https://en.wikipedia.org/wiki/Vibrations_of_a_circular_membrane
+
+Regular polygons
+
+Billards
+
+What is the most efficient way to triangulate a circle or in general a convex polygon. Does using the center as a vertex have advantages or is it better to use on vertex shared between all the other vertices.
