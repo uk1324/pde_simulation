@@ -1007,6 +1007,12 @@ void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool
 		shapeDifferenceTool.selectedRhs = std::nullopt;
 	}
 
+	auto printWinding = [](const Clipper2Lib::PathsD& paths) {
+		for (const auto& path : paths) {
+			std::cout << Clipper2Lib::IsPositive(path);
+		}
+		std::cout << '\n';
+	};
 
 	if (applyDown && shapeDifferenceTool.selectedLhs.has_value() && shapeDifferenceTool.selectedRhs) {
 		auto bodyLhs = rigidBodies.get(*shapeDifferenceTool.selectedLhs);
@@ -1019,8 +1025,12 @@ void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool
 		}
 		const auto lhs = getShapePath(bodyLhs->shape);
 		const auto rhs = getShapePath(bodyRhs->shape);
+		printWinding(lhs);
+		printWinding(rhs);
 
 		const auto result = Clipper2Lib::Difference(lhs, rhs, Clipper2Lib::FillRule::NonZero);
+		printWinding(result);
+
 		// Creating copies to prevent pointer invalidation.
 		const auto entity0Material = bodyLhs->material;
 		const auto entity0IsStatic = bodyLhs->isStatic;

@@ -53,14 +53,16 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 	gfx.filledTriangles(constView(tempVertices), constView(trianglesVertices), insideColor(color, isStatic));
 
 	if (boundary.size() > 1) {
-		i32 startVertex = boundary[0];
+		i64 startVertexI = 0;
 		for (i64 i = 0; i < boundary.size(); i++) {
 			if (boundary[i + 1] == EditorPolygonShape::PATH_END_INDEX) {
-				gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[startVertex], outlineWidth(), outlineColor);
-				startVertex = i + 1;
+				gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[boundary[startVertexI]], outlineWidth(), outlineColor);
+				// boundary index after PATH_END_INDEX
+				startVertexI = i + 2;
 				if (i == boundary.size() - 2) {
 					break;
 				}
+
 				continue;
 			}
 			gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[boundary[i + 1]], outlineWidth(), outlineColor);
