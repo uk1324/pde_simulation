@@ -33,6 +33,8 @@ struct Simulation {
 
 	b2WorldId world;
 
+	b2BodyId boundariesBodyId;
+
 	bool debugDisplay = false;
 
 	enum class ShapeType {

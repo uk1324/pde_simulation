@@ -70,15 +70,16 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 	}
 }
 
-void GameRenderer::emitter(Vec2 position, bool isPreview) {
-	gfx.diskTriangulated(position, Constants::EMITTER_DISPLAY_RADIUS, Vec4(0.0f, 1.0f, 1.0f, isPreview ? 0.3f : 0.5f));
+void GameRenderer::emitter(Vec2 position, bool isPreview, bool isSelected) {
+	Vec3 color = isSelected ? Vec3(0.0f, 1.0f, 1.0f) : Vec3(0.0f, 0.7f, 0.7f);
+	gfx.diskTriangulated(position, Constants::EMITTER_DISPLAY_RADIUS, Vec4(color, isPreview ? 0.3f : 0.5f));
 }
 
-void GameRenderer::emitter(Vec2 positionRelativeToBody, Vec2 bodyTranslation, f32 bodyRotation, bool isPreview) {
+void GameRenderer::emitter(Vec2 positionRelativeToBody, Vec2 bodyTranslation, f32 bodyRotation, bool isPreview, bool isSelected) {
 	Vec2 pos = positionRelativeToBody;
 	pos *= Rotation(bodyRotation);
 	pos += bodyTranslation;
-	emitter(pos, isPreview);
+	emitter(pos, isPreview, isSelected);
 }
 
 f32 GameRenderer::outlineWidth() const {

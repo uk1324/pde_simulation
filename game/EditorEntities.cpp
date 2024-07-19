@@ -63,7 +63,7 @@ EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
 }
 
 EditorEmitter EditorEmitter::DefaultInitialize::operator()() {
-	return EditorEmitter(BACKGROUND_EDITOR_RIGID_BODY_ID, Vec2(0.0f), 0.0f, false, 0.0f, 0.0f, std::nullopt);
+	return EditorEmitter(EditorRigidBodyId::invalid(), Vec2(0.0f), 0.0f, false, 0.0f, 0.0f, std::nullopt);
 }
 
 EditorPolygonShape EditorPolygonShape::make() {
@@ -141,18 +141,18 @@ bool EditorMaterial::operator==(const EditorMaterial& other) const {
 EditorMaterial::EditorMaterial(EditorMaterialType type)	
 	: type(type) {}
 
-EditorEmitter::EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button)
-	: rigidbody(rigidbody)
-	, positionRelativeToRigidBody(positionRelativeToRigidBody)
+EditorEmitter::EditorEmitter(std::optional<EditorRigidBodyId> rigidBody, Vec2 position, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button)
+	: rigidBody(rigidBody)
+	, position(position)
 	, strength(strength)
 	, oscillate(oscillate) 
 	, period(period) 
 	, phaseOffset(phaseOffset)
 	, activateOn(button) {}
 
-void EditorEmitter::initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button) {
-	this->rigidbody = rigidbody;
-	this->positionRelativeToRigidBody = positionRelativeToRigidBody;
+void EditorEmitter::initialize(std::optional<EditorRigidBodyId> rigidBody, Vec2 position, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button) {
+	this->rigidBody = rigidBody;
+	this->position = position;
 	this->strength = strength;
 	this->oscillate = oscillate;
 	this->period = period;
@@ -170,17 +170,19 @@ const char* editorMaterialTypeName(EditorMaterialType material) {
 	return "";
 }
 
-void materialTypeComboGui(EditorMaterialType& selectedType) {
+bool materialTypeComboGui(EditorMaterialType& selectedType) {
 	EditorMaterialType types[]{
 		EditorMaterialType::RELFECTING,
 		EditorMaterialType::TRANSIMISIVE,
 	};
 	const char* preview = editorMaterialTypeName(selectedType);
 
+	bool modificationFinished = false;
 	if (ImGui::BeginCombo("type", preview)) {
 		for (auto& type : types) {
 			const auto isSelected = type == selectedType;
 			if (ImGui::Selectable(editorMaterialTypeName(type), isSelected)) {
+				modificationFinished = selectedType != type;
 				selectedType = type;
 			}
 
@@ -190,4 +192,5 @@ void materialTypeComboGui(EditorMaterialType& selectedType) {
 		}
 		ImGui::EndCombo();
 	}
+	return modificationFinished;
 }

@@ -6,15 +6,19 @@
 InputButton::InputButton(KeyCode keycode) 
 	: keycode(keycode) {}
 
-void inputButtonGui(std::optional<InputButton>& button, bool& watingForKeyPress){
+bool inputButtonGui(std::optional<InputButton>& button, bool& watingForKeyPress) {
+	bool modificationFinished = false;
+
 	ImGui::PushID(&watingForKeyPress);
 	if (!button.has_value()) {
 		if (watingForKeyPress) {
 			ImGui::Text("press key, esc to cancel");
 			if (Input::isKeyDown(KeyCode::ESCAPE)) {
+				modificationFinished = true;
 				watingForKeyPress = false;
 			} else if (Input::lastKeycodeDownThisFrame().has_value()) {
 				button = InputButton(*Input::lastKeycodeDownThisFrame());
+				modificationFinished = true;
 				watingForKeyPress = false;
 			}
 
@@ -30,6 +34,8 @@ void inputButtonGui(std::optional<InputButton>& button, bool& watingForKeyPress)
 		}
 	}
 	ImGui::PopID();
+
+	return modificationFinished;
 }
 
 bool inputButtonIsHeld(const InputButton& button) {

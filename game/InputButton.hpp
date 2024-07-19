@@ -7,7 +7,9 @@ struct InputButton {
 	InputButton(KeyCode keycode);
 
 	KeyCode keycode;
+
+	bool operator==(const InputButton&) const = default;
 };
 
-void inputButtonGui(std::optional<InputButton>& button, bool& watingForKeyPress);
+bool inputButtonGui(std::optional<InputButton>& button, bool& watingForKeyPress);
 bool inputButtonIsHeld(const InputButton& button);

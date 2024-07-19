@@ -111,9 +111,13 @@ EditorAction::EditorAction(const EditorActionSelectionChange& action)
     : selectionChange(action)
     , type(EditorActionType::SELECTION_CHANGE) {}
 
-EditorAction::EditorAction(const EditorActionModifyReflectingBody& action) 
-    : modifyReflectingBody(action)
-    , type(EditorActionType::MODIFY_REFLECTING_BODY) {}
+EditorAction::EditorAction(const EditorActionModifyRigidBody& action) 
+    : modifyRigidBody(action)
+    , type(EditorActionType::MODIFY_RIGID_BODY) {}
+
+EditorAction::EditorAction(const EditorActionModifyEmitter& action)
+    : modifyEmitter(action)
+    , type(EditorActionType::MODIFY_EMITTER) {}
 
 EditorActionCreateEntity::EditorActionCreateEntity(EditorEntityId id)
     : id(id) {}
@@ -125,7 +129,12 @@ EditorActionSelectionChange::EditorActionSelectionChange(View<EditorEntityId> ol
 EditorActionDestroyEntity::EditorActionDestroyEntity(EditorEntityId id) 
     : id(id) {}
 
-EditorActionModifyReflectingBody::EditorActionModifyReflectingBody(EditorRigidBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity)
+EditorActionModifyRigidBody::EditorActionModifyRigidBody(EditorRigidBodyId id, const EditorRigidBody& oldEntity, const EditorRigidBody& newEntity)
+    : id(id)
+    , oldEntity(oldEntity)
+    , newEntity(newEntity) {}
+
+EditorActionModifyEmitter::EditorActionModifyEmitter(EditorEmitterId id, const EditorEmitter& oldEntity, const EditorEmitter& newEntity)    
     : id(id)
     , oldEntity(oldEntity)
     , newEntity(newEntity) {}

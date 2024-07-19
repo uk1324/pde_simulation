@@ -173,14 +173,25 @@ void MainLoop::update() {
 			}
 
 			for (const auto& emitter : editor.emitters) {
-				const auto physicsId = editorRigidBodyIdToPhysicsId.find(emitter->rigidbody);
-				if (physicsId == editorRigidBodyIdToPhysicsId.end()) {
-					CHECK_NOT_REACHED();
-					continue;
+				b2BodyId bodyId;
+				Vec2 position(0.0f);
+				if (emitter->rigidBody.has_value()) {
+					const auto physicsId = editorRigidBodyIdToPhysicsId.find(*emitter->rigidBody);
+
+					if (physicsId == editorRigidBodyIdToPhysicsId.end()) {
+						CHECK_NOT_REACHED();
+						continue;
+					}
+					bodyId = physicsId->second;
+					position = emitter->position;
+				} else {
+					bodyId = simulation.boundariesBodyId;
+					position = emitter->position - toVec2(b2Body_GetPosition(simulation.boundariesBodyId));
 				}
+				
 				simulation.emitters.add(Simulation::Emitter{
-					.body = physicsId->second,
-					.positionRelativeToBody = emitter->positionRelativeToRigidBody,
+					.body = bodyId,
+					.positionRelativeToBody = position,
 					.strength = emitter->strength,
 					.oscillate = emitter->oscillate,
 					.period = emitter->period,

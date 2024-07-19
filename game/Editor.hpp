@@ -9,8 +9,7 @@
 #include <game/ParametricEllipse.hpp>
 #include <game/ParametricParabola.hpp>
 #include <game/Gizmo.hpp>
-#include <dependencies/Clipper2/CPP/Clipper2Lib/include/clipper2/clipper.h>
-//#include <clipper2/clipper.h>
+#include <clipper2/clipper.h>
 
 struct Editor {
 	static Editor make();
@@ -22,7 +21,18 @@ struct Editor {
 	bool beginPropertyEditor(const char* id);
 	void selectToolGui();
 	void entityGui(EditorEntityId id);
-	void shapeGui(EditorShape& shape);
+	struct EntityGuiRigidBody {
+		EditorRigidBodyId id;
+		EditorRigidBody old;
+	};
+	std::optional<EntityGuiRigidBody> entityGuiRigidBody;
+	struct EntityGuiEmitter {
+		EditorEmitterId id;
+		EditorEmitter old;
+	};
+	std::optional<EntityGuiEmitter> entityGuiEmitter;
+
+	bool shapeGui(EditorShape& shape);
 
 	void render(GameRenderer& renderer, const GameInput& input);
 
@@ -94,10 +104,6 @@ struct Editor {
 	} parabolaTool;
 
 	struct EmitterTool {
-		static EmitterTool make();
-
-		bool isRigidBodyUnderCursor;
-
 		void render(Vec2 cursorPos);
 	} emitterTool;
 
@@ -110,15 +116,16 @@ struct Editor {
 
 	EditorMaterial materialSetting() const;
 	void materialSettingGui();
-	void transmissiveMaterialGui(EditorMaterialTransimisive& material);
+	bool transmissiveMaterialGui(EditorMaterialTransimisive& material);
 	void rigidBodyGui();
 
 	f32 emitterStrengthSetting = 5.0f;
 	bool emitterOscillateSetting = false;
 	f32 emitterPeriodSetting = 1.0f;
 	f32 emitterPhaseOffsetSetting = 0.0f;
+	std::optional<InputButton> emitterActivateOnSetting;
 
-	void emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset);
+	bool emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset, std::optional<InputButton>& activateOn);
 
 	struct ShapeBooleanOperationsTool {
 		std::optional<EditorRigidBodyId> selectedRhs;

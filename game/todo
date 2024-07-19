@@ -37,3 +37,18 @@ Billards
 What is the most efficient way to triangulate a circle or in general a convex polygon. Does using the center as a vertex have advantages or is it better to use on vertex shared between all the other vertices.
 
 1d slice view window.
+
+How should undo redo of float input or any other text input be handled be handled
+ideas
+When a modification is found (compare state before gui and after gui) save the state. When the modification is finished then create an action.
+One issue is what does when modification is finished mean.
+If you just assume when the input is deactiated then things like this break.
+Click the input
+Start writing
+press ctrl+z
+No action will be saved, so it will revert the action done before clicking the input.
+To handle this case I guess you could process the ctrl+z some way so it create an action and the the actual ctrl+z would undo it.
+
+Could do something with combining actions if there are 2 consecutive actions that modify the same field.
+
+Google search forgets the redo undo after you unfocus.

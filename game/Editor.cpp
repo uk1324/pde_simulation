@@ -148,9 +148,15 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 	}
 
 	case EMMITER: {
+		if (!input.cursorLeftDown) {
+			break;
+		}
+
+		std::optional<EditorRigidBodyId> rigidBody;
+		Vec2 pos = input.cursorPos;
+
 		for (const auto& body : rigidBodies) {
 			if (!isPointInEditorShape(body->shape, input.cursorPos)) {
-				emitterTool.isRigidBodyUnderCursor = false;
 				continue;
 			}
 			const auto transform = tryGetShapeTransform(body->shape);
@@ -158,20 +164,16 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 				CHECK_NOT_REACHED();
 				continue;
 			}
-
-			emitterTool.isRigidBodyUnderCursor = true;
-			
-			if (input.cursorLeftDown) {
-				auto emitter = emitters.create();
-
-				Vec2 pos = input.cursorPos;
-				pos -= transform->translation;
-				pos *= Rotation(-transform->rotation);
-				emitter->initialize(body.id, pos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting, std::nullopt);
-				actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(emitter.id))));
-			}
+			pos = input.cursorPos;
+			pos -= transform->translation;
+			pos *= Rotation(-transform->rotation);
 			break;
 		}
+
+		auto emitter = emitters.create();
+		emitter->initialize(rigidBody, pos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting, emitterActivateOnSetting);
+		actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(emitter.id))));
+
 		break;
 	}
 
@@ -182,7 +184,6 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 
 
 	}
-
 	render(renderer, input);
 	gui();
 
@@ -248,7 +249,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material, body->isStatic);
 					auto newShape = cloneShape(old.shape);
 					shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
-					actions.add(*this, EditorAction(EditorActionModifyReflectingBody(entity.rigidBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
+					actions.add(*this, EditorAction(EditorActionModifyRigidBody(entity.rigidBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
 
 					i++;
 					break;
@@ -403,6 +404,7 @@ void Editor::gui() {
 
 		firstFrame = false;
 	}
+
 	//if (ImGui::BeginMainMenuBar()) {
 	//	if (ImGui::BeginMenu("cursor snap")) {
 	//		/*if (ImGui::MenuItem("new")) {
@@ -575,7 +577,7 @@ void Editor::gui() {
 
 		case EMMITER:
 			if (beginPropertyEditor("emitterSettings")) {
-				emitterGui(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
+				emitterGui(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting, emitterActivateOnSetting);
 				Gui::endPropertyEditor();
 			}
 			Gui::popPropertyEditor();
@@ -616,8 +618,33 @@ void Editor::selectToolGui() {
 	}
 }
 
+template<typename Action, typename EntityId, typename Entity, typename EntityGuiEntity>
+void entityGuiActionLogic(Editor& editor, EditorActions& actions, bool modificationFinished, EntityId id, Entity& old, Entity& current, std::optional<EntityGuiEntity>& entityGuiEntity) {
+	const auto modificationHappened = old != current;
+	if (modificationHappened && !modificationFinished && !entityGuiEntity.has_value()) {
+		entityGuiEntity = EntityGuiEntity{
+			.id = id,
+			.old = old
+		};
+	}
+	if (modificationHappened && modificationFinished) {
+		actions.add(editor, EditorAction(Action(id, old, current)));
+	} else if (modificationFinished) {
+		if (!entityGuiEntity.has_value()) {
+			ASSERT_NOT_REACHED();
+			return;
+		}
+		if (id == entityGuiEntity->id) {
+			actions.add(editor, EditorAction(Action(id, entityGuiEntity->old, current)));
+			entityGuiEntity = std::nullopt;
+		} else {
+			// Should this be possible? I guess the selection can change (using undo redo for example) during the modification.
+			entityGuiEntity = std::nullopt;
+		}
+	}
+}
+
 void Editor::entityGui(EditorEntityId id) {
-	
 	switch (id.type) {
 		using enum EditorEntityType;
 
@@ -627,27 +654,27 @@ void Editor::entityGui(EditorEntityId id) {
 			CHECK_NOT_REACHED();
 			break;
 		}
-		// @Performance:
 		auto old = *body;
 
 		ImGui::SeparatorText("rigid body");
 
+		bool modificationFinished = false;
 		if (beginPropertyEditor("rigidBody")) {
-			Gui::checkbox("is static", body->isStatic);
+			modificationFinished |= Gui::checkbox("is static", body->isStatic);
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
 
 		ImGui::SeparatorText("material");
 		const auto oldMaterialType = body->material.type;
-		materialTypeComboGui(body->material.type);
+		modificationFinished |= materialTypeComboGui(body->material.type);
 		if (beginPropertyEditor("material")) {
 			if (body->material.type == EditorMaterialType::TRANSIMISIVE && oldMaterialType != EditorMaterialType::TRANSIMISIVE) {
 				body->material.transimisive = materialTransimisiveSetting;
 			}
 
 			if (body->material.type == EditorMaterialType::TRANSIMISIVE) {
-				transmissiveMaterialGui(body->material.transimisive);
+				modificationFinished |= transmissiveMaterialGui(body->material.transimisive);
 			}
 			Gui::endPropertyEditor();
 		}
@@ -655,15 +682,34 @@ void Editor::entityGui(EditorEntityId id) {
 
 		ImGui::SeparatorText("shape");
 		if (beginPropertyEditor("rigidBodyShape")) {
-			shapeGui(body->shape);
+			modificationFinished |= shapeGui(body->shape);
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
+		entityGuiActionLogic<EditorActionModifyRigidBody>(*this, actions, modificationFinished, id.rigidBody(), old, *body, entityGuiRigidBody);
 
-		// @Performance: could make the gui return if modified and only then add.
-		if (old != *body) {
-			actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), old, *body)));
-		}
+		//const auto modificationHappened = old != *body; 
+		//if (modificationHappened && !modificationFinished && !entityGuiRigidBody.has_value()) {
+		//	entityGuiRigidBody = EntityGuiRigidBody{
+		//		.id = id.rigidBody(),
+		//		.old = old
+		//	};
+		//}
+		//if (modificationHappened && modificationFinished) {
+		//	actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), old, *body)));
+		//} else if (modificationFinished) {
+		//	if (!entityGuiRigidBody.has_value()) {
+		//		ASSERT_NOT_REACHED();
+		//	}
+		//	if (id.rigidBody() == entityGuiRigidBody->id) {
+		//		actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), entityGuiRigidBody->old, *body)));
+		//		entityGuiRigidBody = std::nullopt; 
+		//	} else {
+		//		// Should this be possible? I guess the selection can change (using undo redo for example) during the modification.
+		//		entityGuiRigidBody = std::nullopt;
+		//	}
+		//}
+
 		break;
 	}
 
@@ -673,27 +719,37 @@ void Editor::entityGui(EditorEntityId id) {
 			CHECK_NOT_REACHED();
 			break;
 		}
-		if (beginPropertyEditor("emitterSettings")) {
-			emitterGui(emitter->strength, emitter->oscillate, emitter->period, emitter->phaseOffset);
-			Gui::leafNodeBegin("activate key");
-			inputButtonGui(emitter->activateOn, emitterWatingForKey);
+		auto old = *emitter;
 
+		bool modificationFinished = false;
+
+		if (beginPropertyEditor("emitterSettings")) {
+			modificationFinished |= emitterGui(emitter->strength, emitter->oscillate, emitter->period, emitter->phaseOffset, emitter->activateOn);
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
+
+		entityGuiActionLogic<EditorActionModifyEmitter>(*this, actions, modificationFinished, id.emitter(), old, *emitter, entityGuiEmitter);
+		/*if (old != *emitter) {
+			actions.add(*this, EditorAction(EditorActionModifyEmitter(id.emitter(), old, *emitter)));
+		}*/
 		break;
 	}
 
 	}
 }
 
-void Editor::shapeGui(EditorShape& shape) {
+bool Editor::shapeGui(EditorShape& shape) {
+	bool modificationFinished = false;
+
 	switch (shape.type) {
 		using enum EditorShapeType;
 	case CIRCLE: {
 		auto& circle = shape.circle;
 		Gui::inputVec2("position", circle.center);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
 		Gui::inputFloat("radius", circle.radius);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
 		break;
 	}
 
@@ -701,6 +757,8 @@ void Editor::shapeGui(EditorShape& shape) {
 		break;
 
 	}
+
+	return modificationFinished;
 }
 
 void Editor::render(GameRenderer& renderer, const GameInput& input) {
@@ -754,7 +812,8 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	for (const auto& emitter : emitters) {
-		renderer.emitter(getEmitterPosition(emitter.entity), false);
+		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(emitter.id));
+		renderer.emitter(getEmitterPosition(emitter.entity), false, isSelected);
 	}
 
 	renderer.gfx.drawFilledTriangles();
@@ -818,10 +877,8 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	case EMMITER: {
-		if (emitterTool.isRigidBodyUnderCursor) {
-			renderer.emitter(input.cursorPos, true);
-			renderer.gfx.drawFilledTriangles();
-		}
+		renderer.emitter(input.cursorPos, true, false);
+		renderer.gfx.drawFilledTriangles();
 		break;
 	}
 
@@ -861,13 +918,27 @@ void Editor::destoryAction(EditorAction& action) {
 		break;
 	}
 
-	case MODIFY_REFLECTING_BODY:
+	case MODIFY_RIGID_BODY:
+		break;
+
+	case MODIFY_EMITTER:
 		break;
 
 	}
 }
 
+template<typename Entity, typename Action>
+void redoModify(EntityArray<Entity, typename Entity::DefaultInitialize>& array, const Action& action) {
+	auto entity = array.get(action.id);
+	if (!entity.has_value()) {
+		CHECK_NOT_REACHED();
+		return;
+	}
+	*entity = action.newEntity;
+}
+
 void Editor::redoAction(const EditorAction& action) {
+	std::cout << "redo\n";
 	switch (action.type) {
 		using enum EditorActionType;
 	case CREATE_ENTITY: {
@@ -889,21 +960,31 @@ void Editor::redoAction(const EditorAction& action) {
 		break;
 	}
 
-	case MODIFY_REFLECTING_BODY: {
-		const auto& a = action.modifyReflectingBody;
-		auto body = rigidBodies.get(a.id);
-		if (!body.has_value()) {
-			CHECK_NOT_REACHED();
-			break;
-		}
-		*body = a.newEntity;
+	case MODIFY_RIGID_BODY: {
+		redoModify(rigidBodies, action.modifyRigidBody);
+		break;
+	}
+
+	case MODIFY_EMITTER: {
+		redoModify(emitters, action.modifyEmitter);
 		break;
 	}
 
 	}
 }
 
+template<typename Entity, typename Action>
+void undoModify(EntityArray<Entity, typename Entity::DefaultInitialize>& array, const Action& action) {
+	auto entity = array.get(action.id);
+	if (!entity.has_value()) {
+		CHECK_NOT_REACHED();
+		return;
+	}
+	*entity = action.oldEntity;
+}
+
 void Editor::undoAction(const EditorAction& action) {
+	std::cout << "undo\n";
 	switch (action.type) {
 		using enum EditorActionType;
 	case CREATE_ENTITY: {
@@ -925,14 +1006,12 @@ void Editor::undoAction(const EditorAction& action) {
 		break;
 	}
 
-	case MODIFY_REFLECTING_BODY: {
-		const auto& a = action.modifyReflectingBody;
-		auto body = rigidBodies.get(a.id);
-		if (!body.has_value()) {
-			CHECK_NOT_REACHED();
-			break;
-		}
-		*body = a.oldEntity;
+	case MODIFY_RIGID_BODY:
+		undoModify(rigidBodies, action.modifyRigidBody);
+		break;
+
+	case MODIFY_EMITTER: {
+		undoModify(emitters, action.modifyEmitter);
 		break;
 	}
 		
@@ -1177,7 +1256,7 @@ void Editor::destoryEntity(const EditorEntityId& id) {
 
 	if (id.type == EditorEntityType::RIGID_BODY) {
 		for (const auto& emitter : emitters) {
-			if (emitter->rigidbody == id.rigidBody()) {
+			if (emitter->rigidBody == id.rigidBody()) {
 				emitters.deactivate(emitter.id);
 				actions.add(*this, EditorAction(EditorActionDestroyEntity(EditorEntityId(emitter.id))));
 			}
@@ -1237,22 +1316,36 @@ void Editor::materialSettingGui() {
 	}
 }
 
-void Editor::transmissiveMaterialGui(EditorMaterialTransimisive& material) {
-	Gui::checkbox("match background speed of transmission", material.matchBackgroundSpeedOfTransmission);
+bool Editor::transmissiveMaterialGui(EditorMaterialTransimisive& material) {
+	bool modified = false;
+
+	modified |= Gui::checkbox("match background speed of transmission", material.matchBackgroundSpeedOfTransmission);
 	if (!material.matchBackgroundSpeedOfTransmission) {
 		Gui::inputFloat("speed of transmission", material.speedOfTransmition);
+		modified |= ImGui::IsItemDeactivatedAfterEdit();
 		// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
 		material.speedOfTransmition = std::max(material.speedOfTransmition, 0.0f);
 	}
+
+	return modified;
 }
 
-void Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset) {
+bool Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset, std::optional<InputButton>& activateOn) {
+	bool modificationFinished = false;
+
 	Gui::inputFloat("strength", strength);
-	Gui::checkbox("oscillate", oscillate);
+	modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
+	modificationFinished |= Gui::checkbox("oscillate", oscillate);
 	if (oscillate) {
 		Gui::inputFloat("period", period);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
 		Gui::inputFloat("phase offset", phaseOffset);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
 	}
+	Gui::leafNodeBegin("activate key");
+	modificationFinished |= inputButtonGui(activateOn, emitterWatingForKey);
+
+	return modificationFinished;
 }
 
 bool Editor::canBeMovedByGizmo(EditorEntityType type) {
@@ -1475,12 +1568,16 @@ std::optional<Editor::RigidBodyTransform> Editor::tryGetShapeTransform(const Edi
 }
 
 Vec2 Editor::getEmitterPosition(const EditorEmitter& emitter) const {
-	const auto transform = tryGetRigidBodyTransform(emitter.rigidbody);
+	if (!emitter.rigidBody.has_value()) {
+		return emitter.position;
+	}
+
+	const auto transform = tryGetRigidBodyTransform(*emitter.rigidBody);
 	if (!transform.has_value()) {
 		CHECK_NOT_REACHED();
 		return Vec2(0.0f);
 	}
-	return calculateRelativePosition(emitter.positionRelativeToRigidBody, transform->translation, transform->rotation);
+	return calculateRelativePosition(emitter.position, transform->translation, transform->rotation);
 }
 
 EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {
@@ -1677,6 +1774,7 @@ void Editor::EllipseTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 co
 		const auto ellipse = ParametricEllipse::fromFociAndPointOnEllipse(*focus0, *focus1, cursorPos);
 
 		{
+			color = renderer.insideColor(color, isStaticSetting);
 			const auto center = renderer.gfx.addFilledTriangleVertex(ellipse.center, color);
 			auto previous = renderer.gfx.addFilledTriangleVertex(ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS), color);
 			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
@@ -1694,8 +1792,6 @@ void Editor::EllipseTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 co
 				renderer.gfx.lineTriangulated(pos, previous, renderer.outlineWidth(), outlineColor);
 				previous = pos;
 			}
-			/*renderer.gfx.lineTriangulated(*focus0, cursorPos, renderer.outlineWidth(), outlineColor);
-			renderer.gfx.lineTriangulated(*focus1, cursorPos, renderer.outlineWidth(), outlineColor);*/
 		}
 
 	}
@@ -1843,11 +1939,11 @@ void Editor::RectangleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 
 	const auto vertices = aabbVertices(Aabb::fromCorners(*corner, cursorPos));
 	i32 indices[4]{};
 	for (i64 i = 0; i < vertices.size(); i++) {
-		indices[i] = renderer.gfx.addFilledTriangleVertex(vertices[i], color);
+		indices[i] = renderer.gfx.addFilledTriangleVertex(vertices[i], renderer.insideColor(color, isStaticSetting));
 	}
 	renderer.gfx.addFilledTriangle(indices[0], indices[1], indices[2]);
 	renderer.gfx.addFilledTriangle(indices[0], indices[2], indices[3]);
-	renderer.gfx.polygonTriangulated(constView(vertices), renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
+	renderer.gfx.polygonTriangulated(constView(vertices), renderer.outlineWidth(), renderer.outlineColor(color.xyz(), isStaticSetting));
 }
 
 Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)

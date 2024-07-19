@@ -65,7 +65,7 @@ enum class EditorMaterialType {
 };
 
 const char* editorMaterialTypeName(EditorMaterialType material);
-void materialTypeComboGui(EditorMaterialType& selectedType);
+bool materialTypeComboGui(EditorMaterialType& selectedType);
 
 struct EditorMaterialTransimisive {
 	bool matchBackgroundSpeedOfTransmission;
@@ -105,18 +105,17 @@ struct EditorRigidBody {
 
 using EditorRigidBodyId = EntityArrayId<EditorRigidBody>;
 
-const EditorRigidBodyId BACKGROUND_EDITOR_RIGID_BODY_ID = EditorRigidBodyId(0xFFEEDDCC, 0xFFEEDDCC);
-
 struct EditorEmitter {
 	struct DefaultInitialize {
 		EditorEmitter operator()();
 	};
 
-	EditorEmitter(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton>);
-	void initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativeToRigidBody, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button);
+	EditorEmitter(std::optional<EditorRigidBodyId> rigidBody, Vec2 position, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton>);
+	void initialize(std::optional<EditorRigidBodyId> rigidBody, Vec2 position, f32 strength, bool oscillate, f32 period, f32 phaseOffset, std::optional<InputButton> button);
 
-	EditorRigidBodyId rigidbody;
-	Vec2 positionRelativeToRigidBody;
+	std::optional<EditorRigidBodyId> rigidBody;
+	// If rigidBody != nullopt then this position is relative.
+	Vec2 position;
 
 	f32 strength;
 
@@ -125,6 +124,8 @@ struct EditorEmitter {
 	f32 phaseOffset;
 
 	std::optional<InputButton> activateOn;
+
+	bool operator==(const EditorEmitter&) const = default;
 };
 
 using EditorEmitterId = EntityArrayId<EditorEmitter>;

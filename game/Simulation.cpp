@@ -97,21 +97,20 @@ Simulation::Simulation()
 		const auto boundsCenter = bounds.center();
 		b2BodyDef bodyDef = b2DefaultBodyDef();
 		bodyDef.position = fromVec2(boundsCenter);
-		b2BodyId boundaries = b2CreateBody(world, &bodyDef);
+		boundariesBodyId = b2CreateBody(world, &bodyDef);
 		b2ShapeDef shapeDef = b2DefaultShapeDef();
 
 		b2Polygon bottom = b2MakeOffsetBox(boundsSize.x / 2.0f, halfWidth, b2Vec2{.x = 0.0f, .y = -(boundsSize.y / 2.0f + halfWidth) }, 0.0f);
-		b2CreatePolygonShape(boundaries, &shapeDef, &bottom);
+		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &bottom);
 
 		b2Polygon top = b2MakeOffsetBox(boundsSize.x / 2.0f, halfWidth, b2Vec2{ .x = 0.0f, .y = (boundsSize.y / 2.0f + halfWidth) }, 0.0f);
-		b2CreatePolygonShape(boundaries, &shapeDef, &top);
-
+		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &top);
 
 		b2Polygon left = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = -(boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
-		b2CreatePolygonShape(boundaries, &shapeDef, &left);
+		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &left);
 
 		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = (boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
-		b2CreatePolygonShape(boundaries, &shapeDef, &right);
+		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &right);
 	}
 }
 
@@ -222,7 +221,7 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		}
 
 		const auto pos = getEmitterPos(emitter);
-		const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize) + Vec2T<i64>(1);
+		const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize);
 
 		f32 strength;
 		if (emitter.oscillate) {
@@ -600,7 +599,7 @@ void Simulation::render(GameRenderer& renderer) {
 	}
 
 	for (const auto& emitter : emitters) {
-		renderer.emitter(getEmitterPos(emitter), false);
+		renderer.emitter(getEmitterPos(emitter), false, false);
 	}
 
 	renderer.gfx.drawDisks();
