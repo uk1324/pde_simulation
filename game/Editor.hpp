@@ -42,7 +42,7 @@ struct Editor {
 		ELLIPSE,
 		PARABOLA,
 		EMMITER,
-		SHAPE_DIFFERENCE
+		BOOLEAN_SHAPE_OPERATIONS
 	};
 	ToolType selectedTool = ToolType::CIRCLE;
 
@@ -126,6 +126,18 @@ struct Editor {
 		List<EditorRigidBodyId> bodiesUnderCursorOnLastRightClick;
 		i32 rightClickSelectionCycle;
 		static ShapeBooleanOperationsTool make();
+
+		enum class BooleanOp {
+			DIFFERENCE,
+			INTERSECTION,
+			UNION,
+			XOR,
+		};
+
+		void gui();
+
+		BooleanOp selectedBooleanOp;
+
 	} shapeBooleanOperationsTool;
 	void shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown);
 

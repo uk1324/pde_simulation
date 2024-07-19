@@ -167,7 +167,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 
-	case SHAPE_DIFFERENCE: {
+	case BOOLEAN_SHAPE_OPERATIONS: {
 		shapeBooleanOperationsToolUpdate(input.cursorPos, input.cursorLeftDown, input.cursorRightDown, Input::isKeyDown(KeyCode::LEFT_SHIFT));
 		break;
 	}
@@ -515,7 +515,7 @@ void Editor::gui() {
 			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
 			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
-			{ ToolType::SHAPE_DIFFERENCE, "shape difference", "Select shape to subtract from using left click and shape to subtract using right click. Press shift to apply."},
+			{ ToolType::BOOLEAN_SHAPE_OPERATIONS, "boolean shape operations", "Select left hand size using left click and right hand side right click. Press shift to apply."},
 		};
 
 		ImGui::SeparatorText("tool");
@@ -573,7 +573,13 @@ void Editor::gui() {
 			Gui::popPropertyEditor();
 			break;
 
-		case SHAPE_DIFFERENCE:
+		case BOOLEAN_SHAPE_OPERATIONS: {
+			if (beginPropertyEditor("booleanShapeOperations")) {
+				shapeBooleanOperationsTool.gui();
+				Gui::endPropertyEditor();
+			}
+			Gui::popPropertyEditor();
+		}
 			break;
 
 		}
@@ -699,7 +705,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		const auto isSelected = selectedTool == ToolType::SELECT && selectedEntities.contains(EditorEntityId(body.id));
 		const auto color = materialTypeToColor(body->material.type, GameRenderer::defaultColor);
 		Vec3 outlineColor = renderer.outlineColor(color.xyz(), isSelected);
-		if (selectedTool == ToolType::SHAPE_DIFFERENCE) {
+		if (selectedTool == ToolType::BOOLEAN_SHAPE_OPERATIONS) {
 			if (body.id == shapeBooleanOperationsTool.selectedLhs) {
 				outlineColor = Color3::GREEN;
 			} else if (body.id == shapeBooleanOperationsTool.selectedRhs) {
@@ -800,7 +806,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 
-	case SHAPE_DIFFERENCE:
+	case BOOLEAN_SHAPE_OPERATIONS:
 		break;
 
 	}
@@ -1063,6 +1069,7 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 		s.selectedRhs = result;
 	}
 
+	// debug
 	auto printWinding = [](const Clipper2Lib::PathsD& paths) {
 		for (const auto& path : paths) {
 			std::cout << Clipper2Lib::IsPositive(path);
@@ -1084,19 +1091,42 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 		/*printWinding(lhs);
 		printWinding(rhs);*/
 
-		const auto result = Clipper2Lib::Difference(lhs, rhs, Clipper2Lib::FillRule::NonZero);
-		//printWinding(result);
+		auto executeOperation = [&](const Clipper2Lib::PathsD& paths) {
+			// Creating copies to prevent pointer invalidation.
+			const auto entity0Material = bodyLhs->material;
+			const auto entity0IsStatic = bodyLhs->isStatic;
+			createRigidBodiesFromPaths(paths, entity0Material, entity0IsStatic);
 
-		// Creating copies to prevent pointer invalidation.
-		const auto entity0Material = bodyLhs->material;
-		const auto entity0IsStatic = bodyLhs->isStatic;
-		createRigidBodiesFromPaths(result, entity0Material, entity0IsStatic);
+			// TODO: Actions
+			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedLhs));
+			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedRhs));
+			shapeBooleanOperationsTool.selectedLhs = std::nullopt;
+			shapeBooleanOperationsTool.selectedRhs = std::nullopt;
+		};
 
-		// TODO: Actions
-		destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedLhs));
-		destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedRhs));
-		shapeBooleanOperationsTool.selectedLhs = std::nullopt;
-		shapeBooleanOperationsTool.selectedRhs = std::nullopt;
+		// The shapes should be simple so this option shouldn't matter.
+		const auto fillRule = Clipper2Lib::FillRule::NonZero;
+
+		switch (shapeBooleanOperationsTool.selectedBooleanOp) {
+			using enum ShapeBooleanOperationsTool::BooleanOp;
+		case DIFFERENCE:
+			executeOperation(Clipper2Lib::Difference(lhs, rhs, fillRule));
+			break; 
+
+		case INTERSECTION:
+			executeOperation(Clipper2Lib::Intersect(lhs, rhs, fillRule));
+			break;
+
+		case UNION:
+			executeOperation(Clipper2Lib::Union(lhs, rhs, fillRule));
+			break;
+
+		case XOR:
+			executeOperation(Clipper2Lib::Xor(lhs, rhs, fillRule));
+			break;
+
+		}
+	
 	}
 }
 
@@ -1728,9 +1758,47 @@ Editor::ShapeBooleanOperationsTool Editor::ShapeBooleanOperationsTool::make() {
 		.leftClickSelectionCycle = 0,
 		.bodiesUnderCursorOnLastRightClick = List<EditorRigidBodyId>::empty(),
 		.rightClickSelectionCycle = 0,
+		.selectedBooleanOp = BooleanOp::DIFFERENCE
 	};
 }
 
+void Editor::ShapeBooleanOperationsTool::gui() {
+	auto booleanOpName = [](BooleanOp s) {
+		switch (s) {
+			using enum BooleanOp;
+		case DIFFERENCE: return "difference";
+		case INTERSECTION: return "intersection";
+		case UNION: return "union";
+		case XOR: return "xor";
+		}
+		CHECK_NOT_REACHED();
+		return "";
+	};
+
+	BooleanOp ops[]{
+		BooleanOp::DIFFERENCE,
+		BooleanOp::INTERSECTION,
+		BooleanOp::UNION,
+		BooleanOp::XOR,
+	};
+	const char* preview = booleanOpName(selectedBooleanOp);
+
+	const auto text = "operation";
+	Gui::leafNodeBegin(text);
+	if (ImGui::BeginCombo(Gui::prependWithHashHash(text), preview)) {
+		for (auto& op : ops) {
+			const auto isSelected = op == selectedBooleanOp;
+			if (ImGui::Selectable(booleanOpName(op), isSelected)) {
+				selectedBooleanOp = op;
+			}
+
+			if (isSelected) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
+}
 
 std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 cursorPos) const {
 	if (!grabStartPos.has_value()) {
