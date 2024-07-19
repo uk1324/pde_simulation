@@ -34,6 +34,8 @@ struct Editor {
 
 	const f32 dt = 1.0f / 60.0f;
 
+	bool isCursorSnappingEnabled(const GameInput& input) const;
+
 	enum class ToolType {
 		SELECT,
 		CIRCLE,

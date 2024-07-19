@@ -102,7 +102,7 @@ void GameRenderer::drawGrid() {
 	GridInstance instance{
 		.clipToWorld = gfx.camera.clipSpaceToWorldSpace(),
 		.cameraZoom = gfx.camera.zoom,
-		.smallCellSize = 1.0f
+		.smallCellSize = gridSmallCellSize
 	};
 	drawInstances(gridVao, gfx.instancesVbo, constView(instance), quad2dPtDrawInstances);
 }

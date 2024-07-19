@@ -42,8 +42,16 @@ Editor Editor::make() {
 	return editor;
 }
 
-void Editor::update(GameRenderer& renderer, const GameInput& input) {
+void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 	rigidBodies.update();
+	auto input = originalInput;
+	if (isCursorSnappingEnabled(originalInput)) {
+		Vec2 p = input.cursorPos;
+		p /= renderer.gridSmallCellSize;
+		p = p.applied(round);
+		p *= renderer.gridSmallCellSize;
+		input.cursorPos = p;
+	}
 
 	if (input.undoDown) {
 		if (actions.lastDoneAction >= 0 && actions.lastDoneAction < actions.actions.size()) {
@@ -811,7 +819,18 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 
 	}
 
+	if (isCursorSnappingEnabled(input)) {
+		renderer.gfx.diskTriangulated(input.cursorPos, renderer.outlineWidth(), Vec4(Color3::WHITE, 1.0f));
+	}
+	renderer.gfx.drawFilledTriangles();
+
 	glDisable(GL_BLEND);
+}
+
+bool Editor::isCursorSnappingEnabled(const GameInput& input) const {
+	if (!input.ctrlHeld) return false;
+	if (selectedTool == ToolType::BOOLEAN_SHAPE_OPERATIONS) return false;
+	if (selectedTool == ToolType::SELECT) return false;
 }
 
 void Editor::destoryAction(EditorAction& action) {

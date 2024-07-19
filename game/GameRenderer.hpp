@@ -19,6 +19,8 @@ struct GameRenderer {
 	static constexpr Vec3 defaultColor = Vec3(0.5f);
 	static constexpr f32 transimittingShapeTransparency = 0.3f;
 
+	f32 gridSmallCellSize = 1.0f;
+
 	void drawGrid();
 
 	Gfx2d gfx;
