@@ -35,3 +35,5 @@ Regular polygons
 Billards
 
 What is the most efficient way to triangulate a circle or in general a convex polygon. Does using the center as a vertex have advantages or is it better to use on vertex shared between all the other vertices.
+
+1d slice view window.

@@ -1,5 +1,6 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
+#include <engine/Math/Constants.hpp>
 #include <engine/Input/InputUtils.hpp>
 #include <game/ShapeVertices.hpp>
 #include <game/InputButton.hpp>
@@ -19,10 +20,12 @@
 #include <glad/glad.h>
 
 const auto ELLIPSE_SAMPLE_POINTS = 70;
+const auto PARABOLA_SAMPLE_POINTS = 70;
 
 Editor Editor::make() {
 	Editor editor{
 		.polygonTool = PolygonTool::make(),
+		.shapeBooleanOperationsTool = ShapeBooleanOperationsTool::make(),
 		.gizmoSelectedShapesAtGrabStart = List<EditorShape>::empty(),
 		.roomBounds = Constants::gridBounds(Constants::DEFAULT_GRID_SIZE),
 		.simulationSettings = SimulationSettings::makeDefault(),
@@ -122,6 +125,20 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 	
+	case PARABOLA: {
+		const auto parabola = parabolaTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
+		if (parabola.has_value()) {
+			auto shape = createPolygonShape();
+			auto vertices = List<Vec2>::uninitialized(PARABOLA_SAMPLE_POINTS);
+			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
+				vertices[i] = parabola->sample(i, PARABOLA_SAMPLE_POINTS);
+			}
+			shape->initializeFromSimplePolygon(constView(vertices));
+			createObject(EditorShape(shape.id));
+		}
+		break;
+	}
+
 	case EMMITER: {
 		for (const auto& body : rigidBodies) {
 			if (!isPointInEditorShape(body->shape, input.cursorPos)) {
@@ -151,7 +168,7 @@ void Editor::update(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	case SHAPE_DIFFERENCE: {
-		shapeDifferenceToolUpdate(input.cursorPos, input.cursorLeftDown, input.cursorRightDown, Input::isKeyDown(KeyCode::LEFT_SHIFT));
+		shapeBooleanOperationsToolUpdate(input.cursorPos, input.cursorLeftDown, input.cursorRightDown, Input::isKeyDown(KeyCode::LEFT_SHIFT));
 		break;
 	}
 
@@ -378,17 +395,16 @@ void Editor::gui() {
 
 		firstFrame = false;
 	}
-	bool openHelpWindow = false;
-	if (ImGui::BeginMainMenuBar()) {
-		if (ImGui::BeginMenu("cursor snap")) {
-			/*if (ImGui::MenuItem("new")) {
+	//if (ImGui::BeginMainMenuBar()) {
+	//	if (ImGui::BeginMenu("cursor snap")) {
+	//		/*if (ImGui::MenuItem("new")) {
 
-			}*/
-			ImGui::EndMenu();
-		}
-		
-		ImGui::EndMainMenuBar();
-	}
+	//		}*/
+	//		ImGui::EndMenu();
+	//	}
+	//	
+	//	ImGui::EndMainMenuBar();
+	//}
 
 	auto boundaryConditionCombo = [](const char* text, SimulationBoundaryCondition& value) {
 		struct Entry {
@@ -497,6 +513,7 @@ void Editor::gui() {
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
 			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
 			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
+			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
 			{ ToolType::SHAPE_DIFFERENCE, "shape difference", "Select shape to subtract from using left click and shape to subtract using right click. Press shift to apply."},
 		};
@@ -541,6 +558,10 @@ void Editor::gui() {
 			break;
 
 		case ELLIPSE:
+			rigidBodyGui();
+			break;
+
+		case PARABOLA:
 			rigidBodyGui();
 			break;
 
@@ -671,7 +692,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		if (materialType == EditorMaterialType::TRANSIMISIVE) {
 			return Vec4(color, GameRenderer::transimittingShapeTransparency);
 		}
-		return Vec4(color, 1.0f);
+		return Vec4(color, 0.85f);
 	};
 
 	for (const auto& body : rigidBodies) {
@@ -679,9 +700,9 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		const auto color = materialTypeToColor(body->material.type, GameRenderer::defaultColor);
 		Vec3 outlineColor = renderer.outlineColor(color.xyz(), isSelected);
 		if (selectedTool == ToolType::SHAPE_DIFFERENCE) {
-			if (body.id == shapeDifferenceTool.selectedLhs) {
+			if (body.id == shapeBooleanOperationsTool.selectedLhs) {
 				outlineColor = Color3::GREEN;
-			} else if (body.id == shapeDifferenceTool.selectedRhs) {
+			} else if (body.id == shapeBooleanOperationsTool.selectedRhs) {
 				outlineColor = Color3::CYAN;
 			}
 		}
@@ -741,6 +762,11 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	case ELLIPSE: {
 		ellipseTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
+		break;
+	}
+
+	case PARABOLA: {
+		parabolaTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		break;
 	}
 
@@ -980,31 +1006,61 @@ Vec2 Editor::selectedEntitiesCenter() {
 	return center;
 }
 
-void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown) {
-	std::optional<EditorRigidBodyId> rigidBodyUnderCursor;
+void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown) {
+	// @Performance:
+	auto rigidBodiesUnderCursor = List<EditorRigidBodyId>::empty();
+
 	for (auto body : rigidBodies) {
 		if (isPointInEditorShape(body->shape, cursorPos)) {
-			rigidBodyUnderCursor = body.id;
+			rigidBodiesUnderCursor.add(body.id);
 		}
 	}
 
-	if (cursorLeftDown && rigidBodyUnderCursor.has_value()) {
-		if (*rigidBodyUnderCursor == shapeDifferenceTool.selectedRhs) {
-			shapeDifferenceTool.selectedRhs = std::nullopt;
-		}
-		shapeDifferenceTool.selectedLhs = *rigidBodyUnderCursor;
-	} else if (cursorRightDown && rigidBodyUnderCursor.has_value()) {
-		if (*rigidBodyUnderCursor == shapeDifferenceTool.selectedLhs) {
-			shapeDifferenceTool.selectedLhs = std::nullopt;
-		}
-		shapeDifferenceTool.selectedRhs = *rigidBodyUnderCursor;
-	}
+	auto selectCycleLogic = [](List<EditorRigidBodyId>& currentUnderCursor, List<EditorRigidBodyId>& lastUnderCursor, i32& cycleIndex) -> std::optional<EditorRigidBodyId> {
+		auto copy = [](List<EditorRigidBodyId>& dest, List<EditorRigidBodyId>& src) {
+			dest.clear();
+			for (const auto& x : src) {
+				dest.add(x);
+			}
+		};
 
-	if (cursorLeftDown && !rigidBodyUnderCursor.has_value()) {
-		shapeDifferenceTool.selectedLhs = std::nullopt;
-	}
-	if (cursorRightDown && !rigidBodyUnderCursor.has_value()) {
-		shapeDifferenceTool.selectedRhs = std::nullopt;
+		if (currentUnderCursor.size() == 0) {
+			copy(lastUnderCursor, currentUnderCursor);
+			return std::nullopt;
+		}
+
+		// Cycling from top to bottom.
+		if (currentUnderCursor != lastUnderCursor) {
+			copy(lastUnderCursor, currentUnderCursor);
+			cycleIndex = currentUnderCursor.size() - 1;
+			// TODO: Maybe if there is already a selected object the select the one under it.
+			return currentUnderCursor[cycleIndex];
+		}
+
+		cycleIndex--;
+		if (cycleIndex < 0) {
+			cycleIndex = currentUnderCursor.size() - 1;
+		}
+
+		return currentUnderCursor[cycleIndex];
+	};
+
+	auto& s = shapeBooleanOperationsTool;
+
+	if (cursorLeftDown) {
+		const auto result = selectCycleLogic(rigidBodiesUnderCursor, s.bodiesUnderCursorOnLastLeftClick, s.leftClickSelectionCycle);
+
+		if (result == s.selectedRhs) {
+			s.selectedRhs = std::nullopt;
+		}
+		s.selectedLhs = result;
+	} else if (cursorRightDown) {
+		const auto result = selectCycleLogic(rigidBodiesUnderCursor, s.bodiesUnderCursorOnLastRightClick, s.rightClickSelectionCycle);
+
+		if (result == s.selectedLhs) {
+			s.selectedLhs = std::nullopt;
+		}
+		s.selectedRhs = result;
 	}
 
 	auto printWinding = [](const Clipper2Lib::PathsD& paths) {
@@ -1014,22 +1070,22 @@ void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool
 		std::cout << '\n';
 	};
 
-	if (applyDown && shapeDifferenceTool.selectedLhs.has_value() && shapeDifferenceTool.selectedRhs) {
-		auto bodyLhs = rigidBodies.get(*shapeDifferenceTool.selectedLhs);
-		auto bodyRhs = rigidBodies.get(*shapeDifferenceTool.selectedRhs);
+	if (applyDown && shapeBooleanOperationsTool.selectedLhs.has_value() && shapeBooleanOperationsTool.selectedRhs) {
+		auto bodyLhs = rigidBodies.get(*shapeBooleanOperationsTool.selectedLhs);
+		auto bodyRhs = rigidBodies.get(*shapeBooleanOperationsTool.selectedRhs);
 
 		if (!bodyLhs.has_value() || !bodyRhs.has_value()) {
-			shapeDifferenceTool.selectedRhs = std::nullopt;
-			shapeDifferenceTool.selectedLhs = std::nullopt;
+			shapeBooleanOperationsTool.selectedRhs = std::nullopt;
+			shapeBooleanOperationsTool.selectedLhs = std::nullopt;
 			return;
 		}
 		const auto lhs = getShapePath(bodyLhs->shape);
 		const auto rhs = getShapePath(bodyRhs->shape);
-		printWinding(lhs);
-		printWinding(rhs);
+		/*printWinding(lhs);
+		printWinding(rhs);*/
 
 		const auto result = Clipper2Lib::Difference(lhs, rhs, Clipper2Lib::FillRule::NonZero);
-		printWinding(result);
+		//printWinding(result);
 
 		// Creating copies to prevent pointer invalidation.
 		const auto entity0Material = bodyLhs->material;
@@ -1037,10 +1093,10 @@ void Editor::shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool
 		createRigidBodiesFromPaths(result, entity0Material, entity0IsStatic);
 
 		// TODO: Actions
-		destoryEntity(EditorEntityId(*shapeDifferenceTool.selectedLhs));
-		destoryEntity(EditorEntityId(*shapeDifferenceTool.selectedRhs));
-		shapeDifferenceTool.selectedLhs = std::nullopt;
-		shapeDifferenceTool.selectedRhs = std::nullopt;
+		destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedLhs));
+		destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedRhs));
+		shapeBooleanOperationsTool.selectedLhs = std::nullopt;
+		shapeBooleanOperationsTool.selectedRhs = std::nullopt;
 	}
 }
 
@@ -1666,6 +1722,16 @@ bool Editor::PolygonTool::update(Vec2 cursorPos, bool drawDown, bool drawHeld, b
 	return false;
 }
 
+Editor::ShapeBooleanOperationsTool Editor::ShapeBooleanOperationsTool::make() {
+	return ShapeBooleanOperationsTool{
+		.bodiesUnderCursorOnLastLeftClick = List<EditorRigidBodyId>::empty(),
+		.leftClickSelectionCycle = 0,
+		.bodiesUnderCursorOnLastRightClick = List<EditorRigidBodyId>::empty(),
+		.rightClickSelectionCycle = 0,
+	};
+}
+
+
 std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 cursorPos) const {
 	if (!grabStartPos.has_value()) {
 		return std::nullopt;
@@ -1720,3 +1786,108 @@ void Editor::RectangleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 
 Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)
 	: translation(translation)
 	, rotation(rotation) {}
+
+std::optional<ParametricParabola> Editor::ParabolaTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
+	if (cursorRightDown) {
+		reset();
+		return std::nullopt;
+	}
+
+	if (!cursorLeftDown) {
+		return std::nullopt;
+	}
+
+	if (!focus.has_value()) {
+		focus = cursorPos;
+		return std::nullopt;
+	}
+
+	if (!vertex.has_value()) {
+		vertex = cursorPos;
+		return std::nullopt;
+	}
+
+	const auto result = makeParabola(*focus, *vertex, cursorPos);
+	reset();
+	if (!result.has_value()) {
+		return std::nullopt;
+	}
+	return result;
+}
+
+void Editor::ParabolaTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	auto renderParabola = [&](const ParametricParabola& parabola) {
+		Vec2 previous = parabola.sample(0, PARABOLA_SAMPLE_POINTS);
+		for (i32 i = 1; i < PARABOLA_SAMPLE_POINTS; i++) {
+			const auto p = parabola.sample(i, PARABOLA_SAMPLE_POINTS);
+			renderer.gfx.lineTriangulated(previous, p, renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
+			previous = p;
+		}
+	};
+
+	if (focus.has_value()) {
+		renderer.gfx.diskTriangulated(*focus, renderer.outlineWidth(), Vec4(Color3::WHITE));
+	}
+
+	if (focus.has_value() && !vertex.has_value()) {
+		const auto vertex = cursorPos;
+		const auto parabola = ParabolaTool::makeParabola(*focus, vertex, Vec2(0.0f), 20.0f);
+		if (!parabola.has_value()) {
+			goto renderAndExit;
+		}
+		renderParabola(*parabola);
+	} else if (focus.has_value() && vertex.has_value()) {
+		const auto parabola = ParabolaTool::makeParabola(*focus, *vertex, cursorPos);
+		if (!parabola.has_value()) {
+			goto renderAndExit;
+		}
+		renderParabola(*parabola);
+		renderer.gfx.lineTriangulated(
+			parabola->sample(0, PARABOLA_SAMPLE_POINTS),
+			parabola->sample(PARABOLA_SAMPLE_POINTS - 1, PARABOLA_SAMPLE_POINTS),
+			renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
+	}
+
+	renderAndExit:
+	renderer.gfx.drawFilledTriangles();
+}
+
+std::optional<ParametricParabola> Editor::ParabolaTool::makeParabola(Vec2 focus, Vec2 vertex, Vec2 yBoundPoint, std::optional<f32> maxYOverwrite) {
+	const auto vertexToFocus = focus - vertex;
+	const auto vertexToFocusDistance = vertexToFocus.length();
+	const auto vertexToFocusDirection = vertexToFocus / vertexToFocusDistance;
+	const auto rotation = Rotation(vertexToFocusDirection.angle() - PI<f32> / 2.0f);
+	// if the vertex is at (0, 0) then the focus is at (1/4a).
+	// 1/4a = vertexToFocusDistance <=> a = 1 / 4`vertexToFocusDistance`
+	if (vertexToFocusDistance < 0.01f) {
+		return std::nullopt;
+	}
+	const auto a = 1.0f / (4.0f * vertexToFocusDistance);
+
+	// distance along line
+	auto maxY = dot(vertexToFocusDirection, yBoundPoint - vertex);
+	if (maxYOverwrite.has_value()) {
+		maxY = *maxYOverwrite;
+	}
+
+	if (maxY < 0.01f) {
+		return std::nullopt;
+	}
+
+	const auto maxX = sqrt(maxY / a);
+	if (isnan(maxX)) {
+		return std::nullopt;
+	}
+
+	return ParametricParabola{
+		.vertex = vertex,
+		.a = a,
+		.rotation = rotation,
+		.xBound = maxX
+	};
+}
+
+void Editor::ParabolaTool::reset() {
+	vertex = std::nullopt;
+	focus = std::nullopt;
+}

@@ -7,6 +7,7 @@
 #include <game/GameRenderer.hpp>
 #include <game/GameInput.hpp>
 #include <game/ParametricEllipse.hpp>
+#include <game/ParametricParabola.hpp>
 #include <game/Gizmo.hpp>
 #include <dependencies/Clipper2/CPP/Clipper2Lib/include/clipper2/clipper.h>
 //#include <clipper2/clipper.h>
@@ -39,6 +40,7 @@ struct Editor {
 		POLYGON,
 		RECTANGLE,
 		ELLIPSE,
+		PARABOLA,
 		EMMITER,
 		SHAPE_DIFFERENCE
 	};
@@ -77,6 +79,18 @@ struct Editor {
 		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
 	} ellipseTool;
 
+	struct ParabolaTool {
+		std::optional<Vec2> focus;
+		std::optional<Vec2> vertex;
+
+		std::optional<ParametricParabola> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
+		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
+		void reset();
+
+		// TODO: maxYOverwrite is hacky
+		static std::optional<ParametricParabola> makeParabola(Vec2 focus, Vec2 vertex, Vec2 yBoundPoint, std::optional<f32> maxYOverwrite = std::nullopt);
+	} parabolaTool;
+
 	struct EmitterTool {
 		static EmitterTool make();
 
@@ -103,12 +117,17 @@ struct Editor {
 
 	void emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset);
 
-	struct ShapeDifferenceTool {
+	struct ShapeBooleanOperationsTool {
 		std::optional<EditorRigidBodyId> selectedRhs;
 		std::optional<EditorRigidBodyId> selectedLhs;
 
-	} shapeDifferenceTool;
-	void shapeDifferenceToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown);
+		List<EditorRigidBodyId> bodiesUnderCursorOnLastLeftClick;
+		i32 leftClickSelectionCycle;
+		List<EditorRigidBodyId> bodiesUnderCursorOnLastRightClick;
+		i32 rightClickSelectionCycle;
+		static ShapeBooleanOperationsTool make();
+	} shapeBooleanOperationsTool;
+	void shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown);
 
 	Gizmo gizmo;
 	List<EditorShape> gizmoSelectedShapesAtGrabStart;
