@@ -1,4 +1,5 @@
 #include <game/EditorEntities.hpp>
+#include <imgui/imgui.h>
 #include <dependencies/earcut/earcut.hpp>
 #include <engine/Math/Triangulate.hpp>
 
@@ -157,4 +158,36 @@ void EditorEmitter::initialize(EditorRigidBodyId rigidbody, Vec2 positionRelativ
 	this->period = period;
 	this->phaseOffset = phaseOffset;
 	this->activateOn = button;
+}
+
+const char* editorMaterialTypeName(EditorMaterialType material) {
+	switch (material) {
+		using enum EditorMaterialType;
+	case RELFECTING: return "reflecting";
+	case TRANSIMISIVE: return "transimisive";
+	}
+	CHECK_NOT_REACHED();
+	return "";
+}
+
+void materialTypeComboGui(EditorMaterialType& selectedType) {
+	EditorMaterialType types[]{
+		EditorMaterialType::RELFECTING,
+		EditorMaterialType::TRANSIMISIVE,
+	};
+	const char* preview = editorMaterialTypeName(selectedType);
+
+	if (ImGui::BeginCombo("type", preview)) {
+		for (auto& type : types) {
+			const auto isSelected = type == selectedType;
+			if (ImGui::Selectable(editorMaterialTypeName(type), isSelected)) {
+				selectedType = type;
+			}
+
+			if (isSelected) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
 }

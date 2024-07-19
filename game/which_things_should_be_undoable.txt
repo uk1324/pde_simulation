@@ -1,0 +1,14 @@
+Things that aren't undoable in
+
+- unity
+camera movement
+search box input
+some settings that don't affect the project, they only affect the editor. For example audio toggle, 2d mode toggle, shading mode, scale in game mode, preferences.
+
+- gimp
+Selecting a tool
+Changing brush parameters
+
+One issue with undoing thing that don't affect the image in programs like gimp is that you can have multiple projects open. Then you would either need to store editor state with the project or do some more complicated handling of switching between projects.
+
+Gimp does save the state of the editor on change so that when you relaunch it the settings are the same when the program was closed. Which something like that it would be hard to handle multiple open windows. If you try to open another instance of gimp it just focuses on the old instance. I guess if you really wanted to do something you could have some form of sharing the state. You could look for changes in the settings file and load them or some other from of communication between processes. The isn't really a need for multiple gimp instances, because you can have multiple windows.

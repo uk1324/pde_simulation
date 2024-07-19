@@ -230,7 +230,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 			cursorCaptured = true;
 
 			i64 i = 0;
-			const auto s = actions.beginMulticommand();
+			actions.beginMultiAction();
 			for (auto& entity : selectedEntities) {
 				switch (entity.type) {
 					using enum EditorEntityType;
@@ -259,7 +259,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 
 				}
 			}
-			actions.endMulticommand(s);
+			actions.endMultiAction();
 
 			break;
 		}
@@ -369,14 +369,14 @@ void Editor::selectToolUpdate(const GameInput& input) {
 	}
 
 	if (input.deleteDown) {
-		const auto s = actions.beginMulticommand();
+		actions.beginMultiAction();
 		for (auto& entity : selectedEntities) {
 			destoryEntity(entity);
 		}
 		std::unordered_set<EditorEntityId> empty;
 		actions.addSelectionChange(*this, selectedEntities, empty);
 		selectedEntities.clear();
-		actions.endMulticommand(s);
+		actions.endMultiAction();
 	}
 }
 
@@ -613,7 +613,6 @@ void Editor::selectToolGui() {
 		auto& id = *selectedEntities.begin();
 		entityGui(id);
 	} else {
-		//actions.beginMulticommand();
 	}
 }
 
@@ -639,8 +638,20 @@ void Editor::entityGui(EditorEntityId id) {
 		}
 		Gui::popPropertyEditor();
 
-		//ImGui::SeparatorText("material");
-		// TODO: What to do when switched into a material type that has additional data. Default initialize?
+		ImGui::SeparatorText("material");
+		const auto oldMaterialType = body->material.type;
+		materialTypeComboGui(body->material.type);
+		if (beginPropertyEditor("material")) {
+			if (body->material.type == EditorMaterialType::TRANSIMISIVE && oldMaterialType != EditorMaterialType::TRANSIMISIVE) {
+				body->material.transimisive = materialTransimisiveSetting;
+			}
+
+			if (body->material.type == EditorMaterialType::TRANSIMISIVE) {
+				transmissiveMaterialGui(body->material.transimisive);
+			}
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
 
 		ImGui::SeparatorText("shape");
 		if (beginPropertyEditor("rigidBodyShape")) {
@@ -1114,13 +1125,14 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 			// Creating copies to prevent pointer invalidation.
 			const auto entity0Material = bodyLhs->material;
 			const auto entity0IsStatic = bodyLhs->isStatic;
+			actions.beginMultiAction();
 			createRigidBodiesFromPaths(paths, entity0Material, entity0IsStatic);
 
-			// TODO: Actions
 			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedLhs));
 			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedRhs));
 			shapeBooleanOperationsTool.selectedLhs = std::nullopt;
 			shapeBooleanOperationsTool.selectedRhs = std::nullopt;
+			actions.endMultiAction();
 		};
 
 		// The shapes should be simple so this option shouldn't matter.
@@ -1160,7 +1172,7 @@ void Editor::rigidBodyGui() {
 }
 
 void Editor::destoryEntity(const EditorEntityId& id) {
-	const auto s = actions.beginMulticommand();
+	actions.beginMultiAction();
 	actions.add(*this, EditorAction(EditorActionDestroyEntity(id)));
 
 	if (id.type == EditorEntityType::RIGID_BODY) {
@@ -1171,10 +1183,9 @@ void Editor::destoryEntity(const EditorEntityId& id) {
 			}
 		}
 	}
-	
 
 	deactivateEntity(id);
-	actions.endMulticommand(s);
+	actions.endMultiAction();
 }
 
 EditorShape Editor::makeRectangleShape(Vec2 center, Vec2 halfSize) {
@@ -1209,41 +1220,7 @@ EditorMaterial Editor::materialSetting() const {
 void Editor::materialSettingGui() {
 	ImGui::SeparatorText("material");
 
-	auto materialTypeName = [](EditorMaterialType type) -> const char* {
-		switch (type) {
-			using enum EditorMaterialType;
-		case RELFECTING: return "reflecting";
-		case TRANSIMISIVE: return "transimisive";
-		}
-		CHECK_NOT_REACHED();
-		return "";
-	};
-
-	struct Entry {
-		EditorMaterialType type;
-		// Could add tooltip.
-	};
-
-	Entry entries[]{
-		{ EditorMaterialType::RELFECTING },
-		{ EditorMaterialType::TRANSIMISIVE }
-	};
-	const char* preview = materialTypeName(materialTypeSetting);
-
-	if (ImGui::BeginCombo("type", preview)) {
-		for (auto& entry : entries) {
-			const auto isSelected = entry.type == materialTypeSetting;
-			if (ImGui::Selectable(materialTypeName(entry.type), isSelected)) {
-				materialTypeSetting = entry.type;
-			}
-				
-			if (isSelected) {
-				ImGui::SetItemDefaultFocus();
-			}
-				
-		}
-		ImGui::EndCombo();
-	}
+	materialTypeComboGui(materialTypeSetting);
 
 	switch (materialTypeSetting) {
 		using enum EditorMaterialType;
@@ -1252,18 +1229,21 @@ void Editor::materialSettingGui() {
 		break;
 	case TRANSIMISIVE:
 		if (beginPropertyEditor("transmissiveSettings")) {
-			Gui::checkbox("match background speed of transmission", materialTransimisiveSetting.matchBackgroundSpeedOfTransmission);
-			if (!materialTransimisiveSetting.matchBackgroundSpeedOfTransmission) {
-				Gui::inputFloat("speed of transmission", materialTransimisiveSetting.speedOfTransmition);
-				// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
-				materialTransimisiveSetting.speedOfTransmition = std::max(materialTransimisiveSetting.speedOfTransmition, 0.0f);
-			}
+			transmissiveMaterialGui(materialTransimisiveSetting);
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
 		break;
 	}
+}
 
+void Editor::transmissiveMaterialGui(EditorMaterialTransimisive& material) {
+	Gui::checkbox("match background speed of transmission", material.matchBackgroundSpeedOfTransmission);
+	if (!material.matchBackgroundSpeedOfTransmission) {
+		Gui::inputFloat("speed of transmission", material.speedOfTransmition);
+		// Negative speed wouldn't make sense with the version of the wave equation I am using, because the squaring would remove it anyway.
+		material.speedOfTransmition = std::max(material.speedOfTransmition, 0.0f);
+	}
 }
 
 void Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset) {
@@ -1508,6 +1488,8 @@ EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shap
 	body->shape = shape;
 	body->material = material;
 	body->isStatic = isStatic;
+	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
+	actions.add(*this, EditorAction(std::move(action)));
 	return body;
 }
 
@@ -1608,8 +1590,6 @@ void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const 
 
 void Editor::createObject(EditorShape&& shape) {	
  	auto body = createRigidBody(shape, materialSetting(), isStaticSetting);
-	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
-	actions.add(*this, EditorAction(std::move(action)));
 }
 
 bool Editor::firstFrame = true;

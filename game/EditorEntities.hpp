@@ -64,6 +64,9 @@ enum class EditorMaterialType {
 	TRANSIMISIVE
 };
 
+const char* editorMaterialTypeName(EditorMaterialType material);
+void materialTypeComboGui(EditorMaterialType& selectedType);
+
 struct EditorMaterialTransimisive {
 	bool matchBackgroundSpeedOfTransmission;
 	f32 speedOfTransmition;

@@ -110,6 +110,7 @@ struct Editor {
 
 	EditorMaterial materialSetting() const;
 	void materialSettingGui();
+	void transmissiveMaterialGui(EditorMaterialTransimisive& material);
 	void rigidBodyGui();
 
 	f32 emitterStrengthSetting = 5.0f;

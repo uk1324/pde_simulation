@@ -17,23 +17,21 @@ i64 EditorActions::actionIndexToStackStartOffset(i64 actionIndex) {
     return offset;
 }
 
-bool EditorActions::beginMulticommand() {
-    // Doing the things with started allows nesting multicommands. For example a delete entity might do multiple things and then you might want to call delete entity multiple times. To delete the selected entites for example.
-    if (recordingMultiAction) {
-        return false;
-    }
-    recordingMultiAction = true;
-    currentMultiActionSize = 0;
-    return true;
-}
-
-void EditorActions::endMulticommand(bool started) {
-    ASSERT(recordingMultiAction);
-    if (!started) {
+void EditorActions::beginMultiAction() {
+    if (multiActionNesting > 0) {
+        multiActionNesting++;
         return;
     }
-    // Not asserting that the multicommand isn't empty because it allows writing easier code when adding commands in a loop over a range which can be empty.
-    recordingMultiAction = false;
+    multiActionNesting++;
+    currentMultiActionSize = 0;
+}
+
+void EditorActions::endMultiAction() {
+    ASSERT(multiActionNesting > 0);
+    multiActionNesting--;
+    if (multiActionNesting > 0) {
+        return;
+    }
     if (currentMultiActionSize != 0) {
         actions.add(Action{ currentMultiActionSize });
         lastDoneAction++;
@@ -55,7 +53,7 @@ void EditorActions::add(Editor& editor, EditorAction&& action) noexcept {
             actions.pop();
         }
     }
-    if (recordingMultiAction) {
+    if (recordingMultiAction()) {
         currentMultiActionSize++;
     } else {
         lastDoneAction++;
@@ -92,6 +90,10 @@ void EditorActions::addSelectionChange(Editor& editor, const std::unordered_set<
 
 void EditorActions::freeSelectionChange(EditorActionSelectionChange& action) {
     stackAllocator.free(action.oldSelection.data());
+}
+
+bool EditorActions::recordingMultiAction() const {
+    return multiActionNesting > 0;
 }
 
 EditorActions::Action::Action(i64 subActionCount)

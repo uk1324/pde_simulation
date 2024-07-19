@@ -75,14 +75,15 @@ struct EditorActions {
 	i64 actionIndexToStackStartOffset(i64 actionIndex);
 
 	// returns if a multicommand actually started.
-	bool beginMulticommand();
-	void endMulticommand(bool started);
+	void beginMultiAction();
+	void endMultiAction();
 
 	void add(Editor& editor, EditorAction&& action) noexcept;
 	void addSelectionChange(Editor& editor, const std::unordered_set<EditorEntityId>& oldSelection, const std::unordered_set<EditorEntityId>& newSelection);
 	void freeSelectionChange(EditorActionSelectionChange& action);
 
-	bool recordingMultiAction = false;
+	i64 multiActionNesting = 0;
+	bool recordingMultiAction() const;
 	i64 currentMultiActionSize = 0;
 
 	StackAllocator stackAllocator;
