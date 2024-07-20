@@ -18,7 +18,7 @@ struct Editor {
 	void selectToolUpdate(const GameInput& input);
 
 	void gui();
-	bool beginPropertyEditor(const char* id);
+	static bool beginPropertyEditor(const char* id);
 	void selectToolGui();
 	void entityGui(EditorEntityId id);
 	struct EntityGuiRigidBody {
@@ -31,6 +31,11 @@ struct Editor {
 		EditorEmitter old;
 	};
 	std::optional<EntityGuiEmitter> entityGuiEmitter;
+	struct EntityGuiRevoluteJoint {
+		EditorRevoluteJointId id;
+		EditorRevoluteJoint old;
+	};
+	std::optional<EntityGuiRevoluteJoint> entityGuiRevoluteJoint;
 
 	bool shapeGui(EditorShape& shape);
 
@@ -131,8 +136,20 @@ struct Editor {
 	struct RevoluteJointTool {
 		bool showPreview = false;
 		void render(GameRenderer& renderer, Vec2 cursorPos);
+
+		f32 motorSpeedSetting = 1.0f;
+		f32 motorMaxTorqueSetting = 10.0f;
+		bool motorEnabledSetting = false;
+		std::optional<InputButton> clockwiseKeySetting;
+		std::optional<InputButton> counterclockwiseKeySetting;
+
+		bool clockwiseKeyWatingForKey = false;
+		bool counterclockwiseKeyWatingForKey = false;
+
 	} revoluteJointTool;
+
 	void revoluteJointToolUpdate(Vec2 cursorPos, bool cursorLeftDown);
+	static bool revoluteJointGui(f32& motorSpeed, f32& motorMaxTorque, bool& motorAlwaysEnabled, std::optional<InputButton>& clockwiseKey, std::optional<InputButton>& counterclockwiseKey, bool& clockwiseKeyWatingForKey, bool& counterclockwiseKeyWatingForKey);
 
 	struct ShapeBooleanOperationsTool {
 		std::optional<EditorRigidBodyId> selectedRhs;
@@ -208,6 +225,7 @@ struct Editor {
 	std::optional<RigidBodyTransform> tryGetShapeTransform(const EditorShape& shape) const;
 	RigidBodyTransform getShapeTransform(const EditorShape& shape) const;
 	Vec2 getEmitterPosition(const EditorEmitter& emitter) const;
+	Vec2 getRevoluteJointAbsolutePosition0(const EditorRevoluteJoint& joint) const;
 
 	EditorShape cloneShape(const EditorShape& shape);
 

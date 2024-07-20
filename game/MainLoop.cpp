@@ -240,14 +240,19 @@ void MainLoop::update() {
 				jointDef.bodyIdB = bodyId1;
 				jointDef.localAnchorB = fromVec2(position1);
 
-				auto joint = b2CreateRevoluteJoint(simulation.world, &jointDef);
+				auto jointId = b2CreateRevoluteJoint(simulation.world, &jointDef);
+				b2RevoluteJoint_SetMaxMotorTorque(jointId, joint->motorMaxTorque);
 
 				simulation.revoluteJoints.add(Simulation::RevoluteJoint{
 					.body0 = bodyId0,
 					.positionRelativeToBody0 = position0,
 					.body1 = bodyId1,
 					.positionRelativeToBody1 = position1,
-					.joint = joint,
+					.joint = jointId,
+					.motorSpeed = joint->motorSpeed,
+					.motorAlwaysEnabled = joint->motorAlwaysEnabled,
+					.clockwiseKey = joint->clockwiseKey,
+					.counterclockwiseKey = joint->counterclockwiseKey,
 				});
 			}
 		} else if (currentState == State::SIMULATION) {

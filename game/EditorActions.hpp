@@ -41,12 +41,21 @@ struct EditorActionModifyEmitter {
 	EditorEmitter newEntity;
 };
 
+struct EditorActionModifyRevoluteJoint {
+	EditorActionModifyRevoluteJoint(EditorRevoluteJointId id, const EditorRevoluteJoint& oldEntity, const EditorRevoluteJoint& newEntity);
+
+	EditorRevoluteJointId id;
+	EditorRevoluteJoint oldEntity;
+	EditorRevoluteJoint newEntity;
+};
+
 enum class EditorActionType {
 	CREATE_ENTITY,
 	DESTROY_ENTITY,
 	SELECTION_CHANGE,
 	MODIFY_RIGID_BODY,
 	MODIFY_EMITTER,
+	MODIFY_REVOLUTE_JOINT,
 };
 
 // TODO: Because this is all on a stack I could just allocate this direclty on the stack without using a union which takes up more space. Using this I could also use a single allocation on the stack for the whole object. For example selection change would allocate it's data in a single allocation.
@@ -58,12 +67,14 @@ struct EditorAction {
 		EditorActionSelectionChange selectionChange;
 		EditorActionModifyRigidBody modifyRigidBody;
 		EditorActionModifyEmitter modifyEmitter;
+		EditorActionModifyRevoluteJoint modifyRevoluteJoint;
 	};
 	explicit EditorAction(const EditorActionCreateEntity& action);
 	explicit EditorAction(const EditorActionDestroyEntity& action);
 	explicit EditorAction(const EditorActionSelectionChange& action);
 	explicit EditorAction(const EditorActionModifyRigidBody& action);
 	explicit EditorAction(const EditorActionModifyEmitter& action);
+	explicit EditorAction(const EditorActionModifyRevoluteJoint& action);
 
 	EditorActionType type;
 };

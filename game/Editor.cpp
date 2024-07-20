@@ -311,6 +311,14 @@ void Editor::selectToolUpdate(const GameInput& input) {
 					selectedEntities.clear();
 				}
 
+				for (auto joint : revoluteJoints) {
+					const auto position = getRevoluteJointAbsolutePosition0(joint.entity);
+					const auto aabb = circleAabb(position, Constants::EMITTER_DISPLAY_RADIUS);
+					if (selectionBox->contains(aabb)) {
+						selectedEntities.insert(EditorEntityId(joint.id));
+					}
+				}
+
 				for (auto emitter : emitters) {
 					const auto position = getEmitterPosition(emitter.entity);
 					const auto aabb = circleAabb(position, Constants::EMITTER_DISPLAY_RADIUS);
@@ -328,6 +336,16 @@ void Editor::selectToolUpdate(const GameInput& input) {
 			} else {
 				// TODO: Make an option to enable a modal menu that would allow the user to choose which entity to select if there are multiple entities under the cursor.
 				std::optional<EditorEntityId> entityUnderCursor;
+
+				if (!entityUnderCursor.has_value()) {
+					for (auto joint : revoluteJoints) {
+						const auto position = getRevoluteJointAbsolutePosition0(joint.entity);
+						if (isPointInCircle(position, Constants::REVOLUTE_JOINT_DISPLAY_RADIUS, input.cursorPos)) {
+							entityUnderCursor = EditorEntityId(joint.id);
+							break;
+						}
+					}
+				}
 
 				if (!entityUnderCursor.has_value()) {
 					for (auto emitter : emitters) {
@@ -592,7 +610,7 @@ void Editor::gui() {
 			break;
 
 		case REVOLUTE_JOINT:
-
+			revoluteJointGui(revoluteJointTool.motorSpeedSetting, revoluteJointTool.motorMaxTorqueSetting, revoluteJointTool.motorEnabledSetting, revoluteJointTool.clockwiseKeySetting, revoluteJointTool.counterclockwiseKeySetting, revoluteJointTool.clockwiseKeyWatingForKey, revoluteJointTool.counterclockwiseKeyWatingForKey);
 			break;
 
 		case BOOLEAN_SHAPE_OPERATIONS: {
@@ -723,7 +741,18 @@ void Editor::entityGui(EditorEntityId id) {
 	}
 
 	case REVOLUTE_JOINT: {
-		ASSERT_NOT_REACHED();
+		auto joint = revoluteJoints.get(id.revoluteJoint());
+		if (!joint.has_value()) {
+			CHECK_NOT_REACHED();
+			break;
+		}
+		auto old = *joint;
+
+		bool modificationFinished = false;
+
+		modificationFinished |= revoluteJointGui(joint->motorSpeed, joint->motorMaxTorque, joint->motorAlwaysEnabled, joint->clockwiseKey, joint->counterclockwiseKey, revoluteJointTool.clockwiseKeyWatingForKey, revoluteJointTool.counterclockwiseKeyWatingForKey);
+
+		entityGuiActionLogic<EditorActionModifyRevoluteJoint>(*this, actions, modificationFinished, id.revoluteJoint(), old, *joint, entityGuiRevoluteJoint);
 		break;
 	}
 
@@ -808,28 +837,15 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	for (const auto& joint : revoluteJoints) {
-		Vec2 pos0(0.0f);
-		Vec2 pos1(0.0f);
-		if (joint->body0.has_value()) {
-			const auto body0 = rigidBodies.get(*joint->body0);
-			if (!body0.has_value()) {
-				CHECK_NOT_REACHED();
-				continue;
-			}
-			const auto transform0 = getShapeTransform(body0->shape);
-			pos0 = calculatePositionFromRelativePosition(joint->position0, transform0.translation, transform0.rotation);
-		} else {
-			pos0 = joint->position0;
+		const auto pos0 = getRevoluteJointAbsolutePosition0(joint.entity);
+		
+		const auto body1 = rigidBodies.get(joint->body1);
+		if (!body1.has_value()) {
+			CHECK_NOT_REACHED();
+			continue;
 		}
-		{
-			const auto body1 = rigidBodies.get(joint->body1);
-			if (!body1.has_value()) {
-				CHECK_NOT_REACHED();
-				continue;
-			}
-			const auto transform1 = getShapeTransform(body1->shape);
-			pos1 = calculatePositionFromRelativePosition(joint->position1, transform1.translation, transform1.rotation);
-		}
+		const auto transform1 = getShapeTransform(body1->shape);
+		const auto pos1 = calculatePositionFromRelativePosition(joint->position1, transform1.translation, transform1.rotation);
 
 		renderer.revoluteJoint(pos0, pos1);
 	}
@@ -948,6 +964,8 @@ void Editor::destoryAction(EditorAction& action) {
 	case MODIFY_EMITTER:
 		break;
 
+	case MODIFY_REVOLUTE_JOINT:
+		break;
 	}
 }
 
@@ -994,6 +1012,11 @@ void Editor::redoAction(const EditorAction& action) {
 		break;
 	}
 
+	case MODIFY_REVOLUTE_JOINT: {
+		redoModify(revoluteJoints, action.modifyRevoluteJoint);
+		break;
+	}
+
 	}
 }
 
@@ -1036,6 +1059,11 @@ void Editor::undoAction(const EditorAction& action) {
 
 	case MODIFY_EMITTER: {
 		undoModify(emitters, action.modifyEmitter);
+		break;
+	}
+
+	case MODIFY_REVOLUTE_JOINT: {
+		undoModify(revoluteJoints, action.modifyRevoluteJoint);
 		break;
 	}
 		
@@ -1154,6 +1182,34 @@ Vec2 Editor::selectedEntitiesCenter() {
 	center /= count;
 
 	return center;
+}
+
+bool Editor::revoluteJointGui(f32& motorSpeed, f32& motorMaxTorque, bool& motorAlwaysEnabled, std::optional<InputButton>& clockwiseKey, std::optional<InputButton>& counterclockwiseKey, bool& clockwiseKeyWatingForKey, bool& counterclockwiseKeyWatingForKey) {
+	bool modificationFinished = false;
+
+	if (beginPropertyEditor("simulation settings")) {
+
+		ImGui::SeparatorText("motor");
+
+		modificationFinished |= Gui::checkbox("always enabled", motorAlwaysEnabled);
+
+		Gui::inputFloat("speed", motorSpeed);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
+
+		Gui::inputFloat("motor max torque", motorMaxTorque);
+		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
+
+		Gui::leafNodeBegin("clockwise key");
+		modificationFinished |= inputButtonGui(clockwiseKey, clockwiseKeyWatingForKey);
+
+		Gui::leafNodeBegin("counterclockwise key");
+		modificationFinished |= inputButtonGui(counterclockwiseKey, counterclockwiseKeyWatingForKey);
+
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+
+	return modificationFinished;
 }
 
 void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown, bool applyDown) {
@@ -1411,13 +1467,18 @@ void Editor::revoluteJointToolUpdate(Vec2 cursorPos, bool cursorLeftDown) {
 
 	if (cursorLeftDown && (attachToBackground || attachToTwoRigidBodies)) {
 		auto revoluteJoint = revoluteJoints.create();
+
+		auto intialize = [&](std::optional<EditorRigidBodyId> id0, Vec2 pos0, EditorRigidBodyId id1, Vec2 pos1) {
+			revoluteJoint->intialize(id0, pos0, id1, pos1, revoluteJointTool.motorSpeedSetting, revoluteJointTool.motorMaxTorqueSetting, revoluteJointTool.motorEnabledSetting, revoluteJointTool.clockwiseKeySetting, revoluteJointTool.counterclockwiseKeySetting);
+		};
+
 		if (attachToBackground) {
 			auto body = rigidBodiesUnderCursor.back();
-			revoluteJoint->intialize(std::nullopt, cursorPos, body.id, calculatePosition(body));
+			intialize(std::nullopt, cursorPos, body.id, calculatePosition(body));
 		} else if (attachToTwoRigidBodies) {
 			auto body0 = rigidBodiesUnderCursor[rigidBodiesUnderCursor.size() - 1];
 			auto body1 = rigidBodiesUnderCursor[rigidBodiesUnderCursor.size() - 2];
-			revoluteJoint->intialize(body0.id, calculatePosition(body0), body1.id, calculatePosition(body1));
+			intialize(body0.id, calculatePosition(body0), body1.id, calculatePosition(body1));
 		}
 		actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(EditorRevoluteJointId(revoluteJoint.id)))));
 	}
@@ -1667,6 +1728,20 @@ Vec2 Editor::getEmitterPosition(const EditorEmitter& emitter) const {
 		return Vec2(0.0f);
 	}
 	return calculatePositionFromRelativePosition(emitter.position, transform->translation, transform->rotation);
+}
+
+Vec2 Editor::getRevoluteJointAbsolutePosition0(const EditorRevoluteJoint& joint) const {
+	if (joint.body0.has_value()) {
+		const auto body0 = rigidBodies.get(*joint.body0);
+		if (!body0.has_value()) {
+			CHECK_NOT_REACHED();
+			return Vec2(0.0f);
+		}
+		const auto transform0 = getShapeTransform(body0->shape);
+		return calculatePositionFromRelativePosition(joint.position0, transform0.translation, transform0.rotation);
+	} else {
+		return joint.position0;
+	}
 }
 
 EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {

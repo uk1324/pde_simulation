@@ -140,8 +140,14 @@ struct EditorRevoluteJoint {
 	EditorRigidBodyId body1;
 	Vec2 position1;
 
-	EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1);
-	void intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1);
+	f32 motorSpeed;
+	f32 motorMaxTorque;
+	bool motorAlwaysEnabled;
+	std::optional<InputButton> clockwiseKey;
+	std::optional<InputButton> counterclockwiseKey;
+
+	EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1, f32 motorSpeed, f32 motorMaxTorque, bool motorAlwaysEnabled, std::optional<InputButton> clockwiseKey, std::optional<InputButton> counterclockwiseKey);
+	void intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1, f32 motorSpeed, f32 motorMaxTorque, bool motorAlwaysEnabled, std::optional<InputButton> clockwiseKey, std::optional<InputButton> counterclockwiseKey);
 
 	bool operator==(const EditorRevoluteJoint&) const = default;
 };

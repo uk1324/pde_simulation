@@ -204,19 +204,29 @@ bool materialTypeComboGui(EditorMaterialType& selectedType) {
 	return modificationFinished;
 }
 
-EditorRevoluteJoint::EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1)
+EditorRevoluteJoint::EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1, f32 motorSpeed, f32 motorMaxTorque, bool motorAlwaysEnabled, std::optional<InputButton> clockwiseKey, std::optional<InputButton> counterclockwiseKey)
 	: body0(body0)
 	, position0(position0)
 	, body1(body1)
-	, position1(position1) {}
+	, position1(position1)
+	, motorSpeed(motorSpeed)
+	, motorMaxTorque(motorMaxTorque)
+	, motorAlwaysEnabled(motorAlwaysEnabled)
+	, clockwiseKey(clockwiseKey)
+	, counterclockwiseKey(counterclockwiseKey) {}
 
-void EditorRevoluteJoint::intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1) {
+void EditorRevoluteJoint::intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1, f32 motorSpeed, f32 motorMaxTorque, bool motorAlwaysEnabled, std::optional<InputButton> clockwiseKey, std::optional<InputButton> counterclockwiseKey) {
 	this->body0 = body0;
 	this->position0 = position0;
 	this->body1 = body1;
 	this->position1 = position1;
+	this->motorSpeed = motorSpeed;
+	this->motorMaxTorque = motorMaxTorque;
+	this->motorAlwaysEnabled = motorAlwaysEnabled;
+	this->clockwiseKey = clockwiseKey;
+	this->counterclockwiseKey = counterclockwiseKey;
 }
 
 EditorRevoluteJoint EditorRevoluteJoint::DefaultInitialize::operator()() {
-	return EditorRevoluteJoint(std::nullopt, Vec2(0.0f), EditorRigidBodyId::invalid(), Vec2(0.0f));
+	return EditorRevoluteJoint(std::nullopt, Vec2(0.0f), EditorRigidBodyId::invalid(), Vec2(0.0f), 0.0f, 0.0f, false, std::nullopt, std::nullopt);
 }

@@ -87,6 +87,11 @@ struct Simulation {
 		b2BodyId body1;
 		Vec2 positionRelativeToBody1;
 		b2JointId joint;
+
+		f32 motorSpeed = 1.0f;
+		bool motorAlwaysEnabled = false;
+		std::optional<InputButton> clockwiseKey;
+		std::optional<InputButton> counterclockwiseKey;
 	};
 	List<RevoluteJoint> revoluteJoints;
 

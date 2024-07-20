@@ -236,6 +236,35 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		fillCircle(u, gridPosition, 3, strength);
 	}
 
+	for (const auto& joint : revoluteJoints) { 
+		if (joint.motorAlwaysEnabled) {
+			b2RevoluteJoint_EnableMotor(joint.joint, true);
+			b2RevoluteJoint_SetMotorSpeed(joint.joint, joint.motorSpeed * TAU<f32>);
+			b2Body_SetAwake(joint.body0, true);
+			b2Body_SetAwake(joint.body1, true);
+		} else {
+			bool enabled = false;
+			f32 speed = 0.0f;
+
+			if (joint.clockwiseKey.has_value() && inputButtonIsHeld(*joint.clockwiseKey)) {
+				speed = -joint.motorSpeed * TAU<f32>;
+				enabled = true;
+			} else if (joint.counterclockwiseKey.has_value() && inputButtonIsHeld(*joint.counterclockwiseKey)) {
+				speed = joint.motorSpeed * TAU<f32>;
+				enabled = true;
+			}
+
+			if (enabled) {
+				b2RevoluteJoint_EnableMotor(joint.joint, true);
+				b2RevoluteJoint_SetMotorSpeed(joint.joint, speed);
+				b2Body_SetAwake(joint.body0, true);
+				b2Body_SetAwake(joint.body1, true);
+			} else {
+				b2RevoluteJoint_EnableMotor(joint.joint, false);
+			}
+		}
+	}
+
 	cameraMovement(camera, input, realtimeDt);
 	
 	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));

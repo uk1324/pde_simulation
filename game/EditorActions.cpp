@@ -119,6 +119,10 @@ EditorAction::EditorAction(const EditorActionModifyEmitter& action)
     : modifyEmitter(action)
     , type(EditorActionType::MODIFY_EMITTER) {}
 
+EditorAction::EditorAction(const EditorActionModifyRevoluteJoint& action)
+    : modifyRevoluteJoint(action)
+    , type(EditorActionType::MODIFY_REVOLUTE_JOINT) {}
+
 EditorActionCreateEntity::EditorActionCreateEntity(EditorEntityId id)
     : id(id) {}
 
@@ -135,6 +139,11 @@ EditorActionModifyRigidBody::EditorActionModifyRigidBody(EditorRigidBodyId id, c
     , newEntity(newEntity) {}
 
 EditorActionModifyEmitter::EditorActionModifyEmitter(EditorEmitterId id, const EditorEmitter& oldEntity, const EditorEmitter& newEntity)    
+    : id(id)
+    , oldEntity(oldEntity)
+    , newEntity(newEntity) {}
+
+EditorActionModifyRevoluteJoint::EditorActionModifyRevoluteJoint(EditorRevoluteJointId id, const EditorRevoluteJoint& oldEntity, const EditorRevoluteJoint& newEntity)
     : id(id)
     , oldEntity(oldEntity)
     , newEntity(newEntity) {}
