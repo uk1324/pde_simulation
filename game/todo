@@ -52,3 +52,5 @@ To handle this case I guess you could process the ctrl+z some way so it create a
 Could do something with combining actions if there are 2 consecutive actions that modify the same field.
 
 Google search forgets the redo undo after you unfocus.
+
+Line tool with an option to choose a flat ending or a rounded ending. 

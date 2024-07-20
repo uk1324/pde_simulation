@@ -49,12 +49,13 @@ struct Editor {
 	enum class ToolType {
 		SELECT,
 		CIRCLE,
-		POLYGON,
-		RECTANGLE,
 		ELLIPSE,
 		PARABOLA,
+		POLYGON,
+		RECTANGLE,
+		BOOLEAN_SHAPE_OPERATIONS,
 		EMMITER,
-		BOOLEAN_SHAPE_OPERATIONS
+		REVOLUTE_JOINT,
 	};
 	ToolType selectedTool = ToolType::CIRCLE;
 
@@ -126,6 +127,12 @@ struct Editor {
 	std::optional<InputButton> emitterActivateOnSetting;
 
 	bool emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset, std::optional<InputButton>& activateOn);
+
+	struct RevoluteJointTool {
+		bool showPreview = false;
+		void render(GameRenderer& renderer, Vec2 cursorPos);
+	} revoluteJointTool;
+	void revoluteJointToolUpdate(Vec2 cursorPos, bool cursorLeftDown);
 
 	struct ShapeBooleanOperationsTool {
 		std::optional<EditorRigidBodyId> selectedRhs;
@@ -199,6 +206,7 @@ struct Editor {
 	};
 	std::optional<RigidBodyTransform> tryGetRigidBodyTransform(EditorRigidBodyId id) const;
 	std::optional<RigidBodyTransform> tryGetShapeTransform(const EditorShape& shape) const;
+	RigidBodyTransform getShapeTransform(const EditorShape& shape) const;
 	Vec2 getEmitterPosition(const EditorEmitter& emitter) const;
 
 	EditorShape cloneShape(const EditorShape& shape);
@@ -215,5 +223,6 @@ struct Editor {
 	EntityArray<EditorRigidBody, EditorRigidBody::DefaultInitialize> rigidBodies;
 	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
 	EntityArray<EditorEmitter, EditorEmitter::DefaultInitialize> emitters;
+	EntityArray<EditorRevoluteJoint, EditorRevoluteJoint::DefaultInitialize> revoluteJoints;
 };
 

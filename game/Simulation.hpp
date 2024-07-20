@@ -81,6 +81,15 @@ struct Simulation {
 	List<Emitter> emitters;
 	Vec2 getEmitterPos(const Emitter& emitter);
 
+	struct RevoluteJoint {
+		b2BodyId body0;
+		Vec2 positionRelativeToBody0;
+		b2BodyId body1;
+		Vec2 positionRelativeToBody1;
+		b2JointId joint;
+	};
+	List<RevoluteJoint> revoluteJoints;
+
 	void getShapes(b2BodyId body);
 	List<b2ShapeId> getShapesResult;
 

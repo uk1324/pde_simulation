@@ -130,9 +130,28 @@ struct EditorEmitter {
 
 using EditorEmitterId = EntityArrayId<EditorEmitter>;
 
+struct EditorRevoluteJoint {
+	struct DefaultInitialize {
+		EditorRevoluteJoint operator()();
+	};
+
+	std::optional<EditorRigidBodyId> body0;
+	Vec2 position0;
+	EditorRigidBodyId body1;
+	Vec2 position1;
+
+	EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1);
+	void intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1);
+
+	bool operator==(const EditorRevoluteJoint&) const = default;
+};
+
+using EditorRevoluteJointId = EntityArrayId<EditorRevoluteJoint>;
+
 enum class EditorEntityType {
 	RIGID_BODY,
 	EMITTER,
+	REVOLUTE_JOINT,
 };
 
 struct EditorEntityId {
@@ -142,9 +161,11 @@ struct EditorEntityId {
 
 	explicit EditorEntityId(const EditorRigidBodyId& id);
 	explicit EditorEntityId(const EditorEmitterId& id);
+	explicit EditorEntityId(const EditorRevoluteJointId& id);
 
 	EditorRigidBodyId rigidBody() const;
 	EditorEmitterId emitter() const;
+	EditorRevoluteJointId revoluteJoint() const;
 
 	bool operator==(const EditorEntityId&) const = default;
 };

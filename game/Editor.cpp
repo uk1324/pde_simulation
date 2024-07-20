@@ -164,9 +164,8 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 				CHECK_NOT_REACHED();
 				continue;
 			}
-			pos = input.cursorPos;
-			pos -= transform->translation;
-			pos *= Rotation(-transform->rotation);
+			pos = calculateRelativePositionFromPosition(input.cursorPos, transform->translation, transform->rotation);
+			rigidBody = body.id;
 			break;
 		}
 
@@ -177,11 +176,15 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 		break;
 	}
 
+	case REVOLUTE_JOINT: {
+		revoluteJointToolUpdate(input.cursorPos, input.cursorLeftDown);
+		break;
+	}
+
 	case BOOLEAN_SHAPE_OPERATIONS: {
 		shapeBooleanOperationsToolUpdate(input.cursorPos, input.cursorLeftDown, input.cursorRightDown, Input::isKeyDown(KeyCode::LEFT_SHIFT));
 		break;
 	}
-
 
 	}
 	render(renderer, input);
@@ -222,6 +225,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				}
 
 				case EMITTER:
+				case REVOLUTE_JOINT:
 					break;
 				}
 			}
@@ -256,6 +260,7 @@ void Editor::selectToolUpdate(const GameInput& input) {
 				}
 
 				case EMITTER:
+				case REVOLUTE_JOINT:
 					break;
 
 				}
@@ -428,6 +433,9 @@ void Editor::gui() {
 			case REFLECTING: return "reflecting";
 			case ABSORBING: return "absorbing";
 			}
+
+			CHECK_NOT_REACHED();
+			return "";
 		};
 
 		Entry entries[]{
@@ -520,12 +528,13 @@ void Editor::gui() {
 		const ToolDisplay tools[]{
 			{ ToolType::SELECT, "select", nullptr },
 			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius"},
-			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
-			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
 			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
 			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
-			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
+			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
 			{ ToolType::BOOLEAN_SHAPE_OPERATIONS, "boolean shape operations", "Select left hand size using left click and right hand side right click. Press shift to apply."},
+			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
+			{ ToolType::REVOLUTE_JOINT, "revolute", "Left click to create joint." },
 		};
 
 		ImGui::SeparatorText("tool");
@@ -544,7 +553,6 @@ void Editor::gui() {
 		if (selectedTool == ToolType::SELECT && oldSelection != ToolType::SELECT) {
 			selectedEntities.clear();
 		}
-
 
 		ImGui::Separator();
 
@@ -581,6 +589,10 @@ void Editor::gui() {
 				Gui::endPropertyEditor();
 			}
 			Gui::popPropertyEditor();
+			break;
+
+		case REVOLUTE_JOINT:
+
 			break;
 
 		case BOOLEAN_SHAPE_OPERATIONS: {
@@ -687,29 +699,6 @@ void Editor::entityGui(EditorEntityId id) {
 		}
 		Gui::popPropertyEditor();
 		entityGuiActionLogic<EditorActionModifyRigidBody>(*this, actions, modificationFinished, id.rigidBody(), old, *body, entityGuiRigidBody);
-
-		//const auto modificationHappened = old != *body; 
-		//if (modificationHappened && !modificationFinished && !entityGuiRigidBody.has_value()) {
-		//	entityGuiRigidBody = EntityGuiRigidBody{
-		//		.id = id.rigidBody(),
-		//		.old = old
-		//	};
-		//}
-		//if (modificationHappened && modificationFinished) {
-		//	actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), old, *body)));
-		//} else if (modificationFinished) {
-		//	if (!entityGuiRigidBody.has_value()) {
-		//		ASSERT_NOT_REACHED();
-		//	}
-		//	if (id.rigidBody() == entityGuiRigidBody->id) {
-		//		actions.add(*this, EditorAction(EditorActionModifyReflectingBody(id.rigidBody(), entityGuiRigidBody->old, *body)));
-		//		entityGuiRigidBody = std::nullopt; 
-		//	} else {
-		//		// Should this be possible? I guess the selection can change (using undo redo for example) during the modification.
-		//		entityGuiRigidBody = std::nullopt;
-		//	}
-		//}
-
 		break;
 	}
 
@@ -730,9 +719,11 @@ void Editor::entityGui(EditorEntityId id) {
 		Gui::popPropertyEditor();
 
 		entityGuiActionLogic<EditorActionModifyEmitter>(*this, actions, modificationFinished, id.emitter(), old, *emitter, entityGuiEmitter);
-		/*if (old != *emitter) {
-			actions.add(*this, EditorAction(EditorActionModifyEmitter(id.emitter(), old, *emitter)));
-		}*/
+		break;
+	}
+
+	case REVOLUTE_JOINT: {
+		ASSERT_NOT_REACHED();
 		break;
 	}
 
@@ -816,6 +807,33 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		renderer.emitter(getEmitterPosition(emitter.entity), false, isSelected);
 	}
 
+	for (const auto& joint : revoluteJoints) {
+		Vec2 pos0(0.0f);
+		Vec2 pos1(0.0f);
+		if (joint->body0.has_value()) {
+			const auto body0 = rigidBodies.get(*joint->body0);
+			if (!body0.has_value()) {
+				CHECK_NOT_REACHED();
+				continue;
+			}
+			const auto transform0 = getShapeTransform(body0->shape);
+			pos0 = calculatePositionFromRelativePosition(joint->position0, transform0.translation, transform0.rotation);
+		} else {
+			pos0 = joint->position0;
+		}
+		{
+			const auto body1 = rigidBodies.get(joint->body1);
+			if (!body1.has_value()) {
+				CHECK_NOT_REACHED();
+				continue;
+			}
+			const auto transform1 = getShapeTransform(body1->shape);
+			pos1 = calculatePositionFromRelativePosition(joint->position1, transform1.translation, transform1.rotation);
+		}
+
+		renderer.revoluteJoint(pos0, pos1);
+	}
+
 	renderer.gfx.drawFilledTriangles();
 
 	switch (selectedTool) {
@@ -882,6 +900,11 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 	}
 
+	case REVOLUTE_JOINT: {
+		revoluteJointTool.render(renderer, input.cursorPos);
+		break;
+	}
+
 	case BOOLEAN_SHAPE_OPERATIONS:
 		break;
 
@@ -899,6 +922,7 @@ bool Editor::isCursorSnappingEnabled(const GameInput& input) const {
 	if (!input.ctrlHeld) return false;
 	if (selectedTool == ToolType::BOOLEAN_SHAPE_OPERATIONS) return false;
 	if (selectedTool == ToolType::SELECT) return false;
+	return true;
 }
 
 void Editor::destoryAction(EditorAction& action) {
@@ -1076,6 +1100,9 @@ void Editor::fullyDeleteEntity(const EditorEntityId& id) {
 		emitters.destroy(id.emitter());
 		break;
 		
+	case REVOLUTE_JOINT: 
+		revoluteJoints.destroy(id.revoluteJoint());
+		break;
 	}
 }
 
@@ -1090,6 +1117,10 @@ void Editor::activateEntity(const EditorEntityId& id) {
 	case EMITTER:
 		emitters.activate(id.emitter());
 		break;
+
+	case REVOLUTE_JOINT:
+		revoluteJoints.activate(id.revoluteJoint());
+		break;
 	}
 }
 
@@ -1102,6 +1133,10 @@ void Editor::deactivateEntity(const EditorEntityId& id) {
 
 	case EMITTER:
 		emitters.deactivate(id.emitter());
+		break;
+
+	case REVOLUTE_JOINT:
+		revoluteJoints.deactivate(id.revoluteJoint());
 		break;
 	}
 }
@@ -1221,7 +1256,7 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 			using enum ShapeBooleanOperationsTool::BooleanOp;
 		case DIFFERENCE:
 			executeOperation(Clipper2Lib::Difference(lhs, rhs, fillRule));
-			break; 
+			break;
 
 		case INTERSECTION:
 			executeOperation(Clipper2Lib::Intersect(lhs, rhs, fillRule));
@@ -1236,7 +1271,7 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 			break;
 
 		}
-	
+
 	}
 }
 
@@ -1259,6 +1294,12 @@ void Editor::destoryEntity(const EditorEntityId& id) {
 			if (emitter->rigidBody == id.rigidBody()) {
 				emitters.deactivate(emitter.id);
 				actions.add(*this, EditorAction(EditorActionDestroyEntity(EditorEntityId(emitter.id))));
+			}
+		}
+		for (const auto& joint : revoluteJoints) {
+			if (joint->body0 == id.rigidBody() || joint->body1 == id.rigidBody()) {
+				revoluteJoints.deactivate(joint.id);
+				actions.add(*this, EditorAction(EditorActionDestroyEntity(EditorEntityId(joint.id))));
 			}
 		}
 	}
@@ -1348,11 +1389,47 @@ bool Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseO
 	return modificationFinished;
 }
 
+void Editor::revoluteJointToolUpdate(Vec2 cursorPos, bool cursorLeftDown) {
+	// @Performance:
+	auto rigidBodiesUnderCursor = List<EntityArrayPair<EditorRigidBody>>::empty();
+
+	for (auto body : rigidBodies) {
+		if (isPointInEditorShape(body->shape, cursorPos)) {
+			rigidBodiesUnderCursor.add(body);
+		}
+	}
+
+	auto attachToBackground = rigidBodiesUnderCursor.size() == 1;
+	auto attachToTwoRigidBodies = rigidBodiesUnderCursor.size() >= 2;
+
+	revoluteJointTool.showPreview = attachToBackground || attachToTwoRigidBodies;
+
+	auto calculatePosition = [&](EntityArrayPair<EditorRigidBody>& body) -> Vec2 {
+		const auto transform = getShapeTransform(body->shape);
+		return calculateRelativePositionFromPosition(cursorPos, transform.translation, transform.rotation);
+	};
+
+	if (cursorLeftDown && (attachToBackground || attachToTwoRigidBodies)) {
+		auto revoluteJoint = revoluteJoints.create();
+		if (attachToBackground) {
+			auto body = rigidBodiesUnderCursor.back();
+			revoluteJoint->intialize(std::nullopt, cursorPos, body.id, calculatePosition(body));
+		} else if (attachToTwoRigidBodies) {
+			auto body0 = rigidBodiesUnderCursor[rigidBodiesUnderCursor.size() - 1];
+			auto body1 = rigidBodiesUnderCursor[rigidBodiesUnderCursor.size() - 2];
+			revoluteJoint->intialize(body0.id, calculatePosition(body0), body1.id, calculatePosition(body1));
+		}
+		actions.add(*this, EditorAction(EditorActionCreateEntity(EditorEntityId(EditorRevoluteJointId(revoluteJoint.id)))));
+	}
+}
+
 bool Editor::canBeMovedByGizmo(EditorEntityType type) {
 	switch (type) {
 		using enum EditorEntityType;
 	case RIGID_BODY: return true;
-	case EMITTER: return false;
+	case EMITTER: 
+	case REVOLUTE_JOINT:
+		return false;
 	}
 	CHECK_NOT_REACHED();
 	return false;
@@ -1372,7 +1449,8 @@ Vec2 Editor::entityGetPosition(const EditorEntityId& id) const {
 	}
 
 	case EMITTER:
-		// nop
+	case REVOLUTE_JOINT:
+		// no op
 		return Vec2(0.0f);
 
 	}
@@ -1395,7 +1473,8 @@ void Editor::entitySetPosition(const EditorEntityId& id, Vec2 position) {
 	}
 
 	case EMITTER:
-		// nop
+	case REVOLUTE_JOINT:
+		// no op
 		break;
 	
 	}
@@ -1431,8 +1510,10 @@ Vec2 Editor::entityGetCenter(const EditorEntityId& id) const {
 		return shapeGetCenter(body->shape);
 	}
 
+
 	case EMITTER:
-		return Vec2(0.0f); // nop
+	case REVOLUTE_JOINT:
+		return Vec2(0.0f); // no op
 
 	}
 
@@ -1567,6 +1648,14 @@ std::optional<Editor::RigidBodyTransform> Editor::tryGetShapeTransform(const Edi
 	return RigidBodyTransform(Vec2(0.0f), 0.0f);
 }
 
+Editor::RigidBodyTransform Editor::getShapeTransform(const EditorShape& shape) const {
+	const auto result = tryGetShapeTransform(shape);
+	if (!result.has_value()) {
+		ASSERT_NOT_REACHED();
+	}
+	return *result;
+}
+
 Vec2 Editor::getEmitterPosition(const EditorEmitter& emitter) const {
 	if (!emitter.rigidBody.has_value()) {
 		return emitter.position;
@@ -1577,7 +1666,7 @@ Vec2 Editor::getEmitterPosition(const EditorEmitter& emitter) const {
 		CHECK_NOT_REACHED();
 		return Vec2(0.0f);
 	}
-	return calculateRelativePosition(emitter.position, transform->translation, transform->rotation);
+	return calculatePositionFromRelativePosition(emitter.position, transform->translation, transform->rotation);
 }
 
 EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {
@@ -2053,4 +2142,10 @@ std::optional<ParametricParabola> Editor::ParabolaTool::makeParabola(Vec2 focus,
 void Editor::ParabolaTool::reset() {
 	vertex = std::nullopt;
 	focus = std::nullopt;
+}
+
+void Editor::RevoluteJointTool::render(GameRenderer& renderer, Vec2 cursorPos) {
+	if (showPreview) {
+		renderer.revoluteJoint(cursorPos, true);
+	}
 }

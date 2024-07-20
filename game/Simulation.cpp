@@ -76,6 +76,7 @@ Simulation::Simulation()
 	, reflectingObjects(List<ReflectingObject>::empty())
 	, transmissiveObjects(List<TransmissiveObject>::empty())
 	, emitters(List<Emitter>::empty())
+	, revoluteJoints(List<RevoluteJoint>::empty())
 	, mouseJoint(b2_nullJointId)
 	, getShapesResult(List<b2ShapeId>::empty())
 	, realtimeDt(1.0f / 60.0f)
@@ -602,6 +603,18 @@ void Simulation::render(GameRenderer& renderer) {
 		renderer.emitter(getEmitterPos(emitter), false, false);
 	}
 
+	auto getAbsolutePosition = [](b2BodyId id, Vec2 relativePosition) -> Vec2 {
+		const auto pos = toVec2(b2Body_GetPosition(id));
+		const auto rotation = b2Body_GetAngle(id);
+		return calculatePositionFromRelativePosition(relativePosition, pos, rotation);
+	};
+
+	for (const auto& joint : revoluteJoints) {
+		const auto pos0 = getAbsolutePosition(joint.body0, joint.positionRelativeToBody0);
+		const auto pos1 = getAbsolutePosition(joint.body1, joint.positionRelativeToBody1);
+		renderer.revoluteJoint(pos0, pos1);
+	}
+
 	renderer.gfx.drawDisks();
 	renderer.gfx.drawCircles();
 	renderer.gfx.drawLines();
@@ -610,6 +623,11 @@ void Simulation::render(GameRenderer& renderer) {
 }
 
 void Simulation::reset() {
+	for (auto& joint : revoluteJoints) {
+		b2DestroyJoint(joint.joint);
+	}
+	revoluteJoints.clear();
+
 	for (auto& object : reflectingObjects) {
 		b2DestroyBody(object.id);
 	}

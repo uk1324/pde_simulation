@@ -13,12 +13,21 @@ EditorEntityId::EditorEntityId(const EditorEmitterId& id)
 	, index(id.index())
 	, type(EditorEntityType::EMITTER) {}
 
+EditorEntityId::EditorEntityId(const EditorRevoluteJointId& id)
+	: version(id.version())
+	, index(id.index())
+	, type(EditorEntityType::REVOLUTE_JOINT) {}
+
 EditorRigidBodyId EditorEntityId::rigidBody() const {
 	return EditorRigidBodyId(index, version);
 }
 
 EditorEmitterId EditorEntityId::emitter() const {
 	return EditorEmitterId(index, version);
+}
+
+EditorRevoluteJointId EditorEntityId::revoluteJoint() const {
+	return EditorRevoluteJointId(index, version);
 }
 
 EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
@@ -193,4 +202,21 @@ bool materialTypeComboGui(EditorMaterialType& selectedType) {
 		ImGui::EndCombo();
 	}
 	return modificationFinished;
+}
+
+EditorRevoluteJoint::EditorRevoluteJoint(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1)
+	: body0(body0)
+	, position0(position0)
+	, body1(body1)
+	, position1(position1) {}
+
+void EditorRevoluteJoint::intialize(std::optional<EditorRigidBodyId> body0, Vec2 position0, EditorRigidBodyId body1, Vec2 position1) {
+	this->body0 = body0;
+	this->position0 = position0;
+	this->body1 = body1;
+	this->position1 = position1;
+}
+
+EditorRevoluteJoint EditorRevoluteJoint::DefaultInitialize::operator()() {
+	return EditorRevoluteJoint(std::nullopt, Vec2(0.0f), EditorRigidBodyId::invalid(), Vec2(0.0f));
 }

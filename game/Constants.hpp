@@ -7,6 +7,7 @@ namespace Constants {
 	constexpr Vec2T<i64> DEFAULT_GRID_SIZE(320, 200);
 	constexpr f32 CAMERA_SPEED = 10.0f;
 	constexpr f32 EMITTER_DISPLAY_RADIUS = 0.25f;
+	constexpr f32 REVOLUTE_JOINT_DISPLAY_RADIUS = 0.25f;
 
 	Aabb gridBounds(Vec2T<i64> gridSize);
 };

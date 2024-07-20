@@ -172,12 +172,17 @@ void MainLoop::update() {
 
 			}
 
+			auto positionRelativeToBoundaryBody = [&](Vec2 pos) {
+				return pos - toVec2(b2Body_GetPosition(simulation.boundariesBodyId));
+			};
+
+
+
 			for (const auto& emitter : editor.emitters) {
 				b2BodyId bodyId;
 				Vec2 position(0.0f);
 				if (emitter->rigidBody.has_value()) {
 					const auto physicsId = editorRigidBodyIdToPhysicsId.find(*emitter->rigidBody);
-
 					if (physicsId == editorRigidBodyIdToPhysicsId.end()) {
 						CHECK_NOT_REACHED();
 						continue;
@@ -186,7 +191,7 @@ void MainLoop::update() {
 					position = emitter->position;
 				} else {
 					bodyId = simulation.boundariesBodyId;
-					position = emitter->position - toVec2(b2Body_GetPosition(simulation.boundariesBodyId));
+					position = positionRelativeToBoundaryBody(emitter->position);
 				}
 				
 				simulation.emitters.add(Simulation::Emitter{
@@ -197,6 +202,52 @@ void MainLoop::update() {
 					.period = emitter->period,
 					.phaseOffset = emitter->phaseOffset,
 					.activateOn = emitter->activateOn,
+				});
+			}
+
+			for (const auto& joint : editor.revoluteJoints) {
+				b2BodyId bodyId0;
+				Vec2 position0(0.0f);
+				b2BodyId bodyId1;
+				Vec2 position1(0.0f);
+
+				if (joint->body0.has_value()) {
+					const auto physicsId0 = editorRigidBodyIdToPhysicsId.find(*joint->body0);
+					if (physicsId0 == editorRigidBodyIdToPhysicsId.end()) {
+						CHECK_NOT_REACHED();
+						continue;
+					}
+					bodyId0 = physicsId0->second;
+					position0 = joint->position0;
+				} else {
+					bodyId0 = simulation.boundariesBodyId;
+					position0 = positionRelativeToBoundaryBody(joint->position0);
+				}
+
+				{
+					const auto physicsId1 = editorRigidBodyIdToPhysicsId.find(joint->body1);
+					if (physicsId1 == editorRigidBodyIdToPhysicsId.end()) {
+						CHECK_NOT_REACHED();
+						continue;
+					}
+					bodyId1 = physicsId1->second;
+					position1 = joint->position1;
+				}
+
+				b2RevoluteJointDef jointDef = b2DefaultRevoluteJointDef();
+				jointDef.bodyIdA = bodyId0;
+				jointDef.localAnchorA = fromVec2(position0);
+				jointDef.bodyIdB = bodyId1;
+				jointDef.localAnchorB = fromVec2(position1);
+
+				auto joint = b2CreateRevoluteJoint(simulation.world, &jointDef);
+
+				simulation.revoluteJoints.add(Simulation::RevoluteJoint{
+					.body0 = bodyId0,
+					.positionRelativeToBody0 = position0,
+					.body1 = bodyId1,
+					.positionRelativeToBody1 = position1,
+					.joint = joint,
 				});
 			}
 		} else if (currentState == State::SIMULATION) {

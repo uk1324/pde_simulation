@@ -1,5 +1,6 @@
 #include "GameRenderer.hpp"
 #include <game/Shaders/waveData.hpp>
+#include <game/RelativePositions.hpp>
 #include <game/EditorEntities.hpp>
 #include <game/Constants.hpp>
 #include <game/Shaders/gridData.hpp>
@@ -76,10 +77,28 @@ void GameRenderer::emitter(Vec2 position, bool isPreview, bool isSelected) {
 }
 
 void GameRenderer::emitter(Vec2 positionRelativeToBody, Vec2 bodyTranslation, f32 bodyRotation, bool isPreview, bool isSelected) {
-	Vec2 pos = positionRelativeToBody;
-	pos *= Rotation(bodyRotation);
-	pos += bodyTranslation;
+	Vec2 pos = calculatePositionFromRelativePosition(positionRelativeToBody, bodyTranslation, bodyRotation);;
 	emitter(pos, isPreview, isSelected);
+}
+
+const Vec3 revoluteJointColor = Color3::RED;
+
+void GameRenderer::revoluteJoint(Vec2 position, bool isPreview) {
+	//Vec3 color = isSelected ? Vec3(0.0f, 1.0f, 1.0f) : Vec3(0.0f, 0.7f, 0.7f);
+	gfx.diskTriangulated(position, Constants::REVOLUTE_JOINT_DISPLAY_RADIUS, Vec4(revoluteJointColor, isPreview ? 0.5f : 0.8f));
+}
+
+void GameRenderer::revoluteJoint(Vec2 relativePosition0, Vec2 pos0, f32 rotation0, Vec2 relativePosition1, Vec2 pos1, f32 rotation1) {
+	Vec2 aboslutePos0 = calculatePositionFromRelativePosition(relativePosition0, pos0, rotation0);
+	Vec2 aboslutePos1 = calculatePositionFromRelativePosition(relativePosition1, pos1, rotation1);
+	revoluteJoint(aboslutePos0, aboslutePos1);
+}
+
+void GameRenderer::revoluteJoint(Vec2 absolutePos0, Vec2 absolutePos1) {
+	revoluteJoint(absolutePos0, false);
+	if (absolutePos0.distanceTo(absolutePos1) > Constants::REVOLUTE_JOINT_DISPLAY_RADIUS) {
+		gfx.lineTriangulated(absolutePos0, absolutePos1, 0.2f, revoluteJointColor);
+	}
 }
 
 f32 GameRenderer::outlineWidth() const {
