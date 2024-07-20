@@ -35,10 +35,12 @@ EditorCircleShape::EditorCircleShape(Vec2 center, f32 radius, f32 angle)
 	, radius(radius)
 	, angle(angle) {}
 
-EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic)
+EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask)
 	: shape(shape) 
 	, material(material)
-	, isStatic(isStatic) {}
+	, isStatic(isStatic)
+	, collisionCategories(collisionCategories)
+	, collisionMask(collisionMask) {}
 
 EditorShape::EditorShape(const EditorCircleShape& circle)
 	: circle(circle)
@@ -68,7 +70,7 @@ EditorPolygonShape EditorPolygonShape::DefaultInitialize::operator()() {
 }
 
 EditorRigidBody EditorRigidBody::DefaultInitialize::operator()() {
-	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting(), false);
+	return EditorRigidBody(EditorShape(EditorCircleShape(Vec2(0.0f), 0.0f, 0.0f)), EditorMaterial::makeReflecting(), false, 0, 0);
 }
 
 EditorEmitter EditorEmitter::DefaultInitialize::operator()() {

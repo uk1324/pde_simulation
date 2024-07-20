@@ -112,6 +112,7 @@ Simulation::Simulation()
 
 		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = (boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
 		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &right);
+
 	}
 }
 

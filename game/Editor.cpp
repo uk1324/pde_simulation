@@ -250,10 +250,10 @@ void Editor::selectToolUpdate(const GameInput& input) {
 						continue;
 					}
 
-					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material, body->isStatic);
+					const auto old = EditorRigidBody(gizmoSelectedShapesAtGrabStart[i], body->material, body->isStatic, body->collisionCategories, body->collisionMask);
 					auto newShape = cloneShape(old.shape);
 					shapeSetPosition(newShape, shapeGetPosition(gizmoSelectedShapesAtGrabStart[i]) + result.translation);
-					actions.add(*this, EditorAction(EditorActionModifyRigidBody(entity.rigidBody(), old, EditorRigidBody(newShape, body->material, body->isStatic))));
+					actions.add(*this, EditorAction(EditorActionModifyRigidBody(entity.rigidBody(), old, EditorRigidBody(newShape, body->material, body->isStatic, body->collisionCategories, body->collisionMask))));
 
 					i++;
 					break;
@@ -716,6 +716,9 @@ void Editor::entityGui(EditorEntityId id) {
 			Gui::endPropertyEditor();
 		}
 		Gui::popPropertyEditor();
+
+		modificationFinished |= collisionGui(body->collisionCategories, body->collisionMask);
+
 		entityGuiActionLogic<EditorActionModifyRigidBody>(*this, actions, modificationFinished, id.rigidBody(), old, *body, entityGuiRigidBody);
 		break;
 	}
@@ -1293,10 +1296,9 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 
 		auto executeOperation = [&](const Clipper2Lib::PathsD& paths) {
 			// Creating copies to prevent pointer invalidation.
-			const auto entity0Material = bodyLhs->material;
-			const auto entity0IsStatic = bodyLhs->isStatic;
+			const auto entity0Copy = *bodyLhs;
 			actions.beginMultiAction();
-			createRigidBodiesFromPaths(paths, entity0Material, entity0IsStatic);
+			createRigidBodiesFromPaths(paths, entity0Copy.material, entity0Copy.isStatic, entity0Copy.collisionCategories, entity0Copy.collisionMask);
 
 			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedLhs));
 			destoryEntity(EditorEntityId(*shapeBooleanOperationsTool.selectedRhs));
@@ -1339,6 +1341,7 @@ void Editor::rigidBodyGui() {
 	}
 	Gui::popPropertyEditor();
 	materialSettingGui();
+	collisionGui(rigidBodyCollisionCategoriesSetting, rigidBodyCollisionMaskSetting);
 }
 
 void Editor::destoryEntity(const EditorEntityId& id) {
@@ -1425,6 +1428,46 @@ bool Editor::transmissiveMaterialGui(EditorMaterialTransimisive& material) {
 	}
 
 	return modified;
+}
+
+bool Editor::collisionGui(u32& collisionCategories, u32& collisionMask) {
+	auto bitMaskGui = [](u32& mask) -> bool {
+		bool modificationFinished = false;
+		const char* collisionGroups[]{
+			"A", "B", "C", "D", "E", "F"
+		};
+		ImGui::PushID(&mask);
+		for (i64 i = 0; i < std::size(collisionGroups); i++) {
+			const auto name = collisionGroups[i];
+			const auto bitIndex = i + 2;
+			bool value = (mask >> bitIndex) & 1;
+			const auto old = value;
+			modificationFinished |= Gui::checkbox(name, value);
+			if (modificationFinished) {
+				int x = 5;
+			}
+			mask &= ~(1 << bitIndex);
+			mask |= value << bitIndex;
+		}
+		ImGui::PopID();
+		return modificationFinished;
+	};
+	bool modificationFinished = false;
+	ImGui::SeparatorText("collision groups");
+	if (beginPropertyEditor("collisionGroups")) {
+		modificationFinished |= bitMaskGui(collisionCategories);
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+
+	ImGui::SeparatorText("collide with");
+	if (beginPropertyEditor("collisionGroups")) {
+		modificationFinished |= bitMaskGui(collisionMask);
+		Gui::endPropertyEditor();
+	}
+	Gui::popPropertyEditor();
+
+	return modificationFinished;
 }
 
 bool Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset, std::optional<InputButton>& activateOn) {
@@ -1744,11 +1787,13 @@ Vec2 Editor::getRevoluteJointAbsolutePosition0(const EditorRevoluteJoint& joint)
 	}
 }
 
-EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic) {
+EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask) {
 	auto body = rigidBodies.create();
 	body->shape = shape;
 	body->material = material;
 	body->isStatic = isStatic;
+	body->collisionCategories = collisionCategories;
+	body->collisionMask = collisionMask;
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
 	actions.add(*this, EditorAction(std::move(action)));
 	return body;
@@ -1794,7 +1839,7 @@ Clipper2Lib::PathsD Editor::getShapePath(const EditorShape& shape) const {
 
 }
 
-void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic) {
+void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask) {
 	using namespace Clipper2Lib;
 
 	std::vector<std::vector<Vec2>> polygonToTriangulate;
@@ -1835,7 +1880,7 @@ void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const 
 			polygon->trianglesVertices.add(index);
 		}
 
-		createRigidBody(EditorShape(polygon.id), material, isStatic);
+		createRigidBody(EditorShape(polygon.id), material, isStatic, collisionCategories, collisionMask);
 
 		return polygonEndPathIndex;
 	};
@@ -1850,7 +1895,7 @@ void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const 
 }
 
 void Editor::createObject(EditorShape&& shape) {	
- 	auto body = createRigidBody(shape, materialSetting(), isStaticSetting);
+ 	auto body = createRigidBody(shape, materialSetting(), isStaticSetting, rigidBodyCollisionCategoriesSetting, rigidBodyCollisionMaskSetting);
 }
 
 bool Editor::firstFrame = true;

@@ -93,12 +93,13 @@ struct EditorRigidBody {
 	struct DefaultInitialize {
 		EditorRigidBody operator()();
 	};
-	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
+	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
 
 	EditorShape shape;
 	EditorMaterial material;
 	bool isStatic;
-
+	u32 collisionCategories;
+	u32 collisionMask;
 
 	bool operator==(const EditorRigidBody&) const = default;
 };

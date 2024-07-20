@@ -120,9 +120,21 @@ struct Editor {
 	};
 	bool isStaticSetting = false;
 
+	// Not sure if this is the best way to achieve this, but I want everything to collide with the ground regardless of category.
+	// https://box2d.org/documentation_v3/md_simulation.html#filtering
+	// If a rigidbody has no category it collides has collision disabled.
+	// the default category is 0b1 and this is what the ground has.
+	// The user created bodies can't have a zero category, because then they would pass through the ground.
+	// This is why I set the 0b10 bit and make it inaccesible in the editor.
+	// I also have the disable the collision with this, because if it were enabled then it would be impossible to disable collision.
+	// This is, because if any bit matches in the masks then the collision will occur.
+	u32 rigidBodyCollisionCategoriesSetting = 0b110;
+	u32 rigidBodyCollisionMaskSetting = ~(0b10u);
+
 	EditorMaterial materialSetting() const;
 	void materialSettingGui();
 	bool transmissiveMaterialGui(EditorMaterialTransimisive& material);
+	static bool collisionGui(u32& collisionCategories, u32& collisionMask);
 	void rigidBodyGui();
 
 	f32 emitterStrengthSetting = 5.0f;
@@ -234,12 +246,12 @@ struct Editor {
 	bool isPointInEditorShape(const EditorShape& shape, Vec2 point) const;
 
 	Clipper2Lib::PathsD getShapePath(const EditorShape& shape) const;
-	void createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic);
+	void createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
 
 	EntityArray<EditorPolygonShape, EditorPolygonShape::DefaultInitialize> polygonShapes;
 	EntityArrayPair<EditorPolygonShape> createPolygonShape();
 	EntityArray<EditorRigidBody, EditorRigidBody::DefaultInitialize> rigidBodies;
-	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic);
+	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
 	EntityArray<EditorEmitter, EditorEmitter::DefaultInitialize> emitters;
 	EntityArray<EditorRevoluteJoint, EditorRevoluteJoint::DefaultInitialize> revoluteJoints;
 };

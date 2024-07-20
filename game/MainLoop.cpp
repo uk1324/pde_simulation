@@ -60,6 +60,12 @@ void MainLoop::update() {
 				b2ShapeDef shapeDef = b2DefaultShapeDef();
 				shapeDef.density = 1.0f;
 				shapeDef.friction = 0.3f;
+				shapeDef.filter.categoryBits = body->collisionCategories;
+				shapeDef.filter.maskBits = body->collisionMask;
+
+				/*if (body->collisionCategories != 0b1) {
+					body->collisionCategories &= ~0b1;
+				}*/
 
 				// TODO: Could reuse vertices
 				auto simplifiedOutline = List<Vec2>::empty();
