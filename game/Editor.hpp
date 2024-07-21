@@ -59,6 +59,7 @@ struct Editor {
 		POLYGON,
 		RECTANGLE,
 		REGULAR_POLYGON,
+		LINE,
 		BOOLEAN_SHAPE_OPERATIONS,
 		EMMITER,
 		REVOLUTE_JOINT,
@@ -105,6 +106,14 @@ struct Editor {
 		std::optional<Result> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
 		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
 	} regularPolygonTool;
+
+	struct LineTool {
+		f32 width = 1.0f;
+		std::optional<Vec2> endpoint0;
+
+		std::optional<std::pair<Vec2, Vec2>> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
+		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
+	} lineTool;
 
 	struct EllipseTool {
 		std::optional<Vec2> focus0;

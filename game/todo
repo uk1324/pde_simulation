@@ -81,3 +81,5 @@ emitter settings.
 Display settings
 grid checkbox
 border checkbox
+
+Make a function outlineLine so that there isn't as much copy pasing in tools for example.

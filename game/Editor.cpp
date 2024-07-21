@@ -21,6 +21,7 @@
 
 const auto ELLIPSE_SAMPLE_POINTS = 70;
 const auto PARABOLA_SAMPLE_POINTS = 70;
+const auto LINE_CAP_POINT_COUNT = 12;
 
 Editor Editor::make() {
 	Editor editor{
@@ -131,6 +132,24 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 		}
 		break;
 
+	}
+
+	case LINE: {
+		const auto line = lineTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
+		if (line.has_value()) {
+			auto shape = createPolygonShape();
+			// @Performance:
+			auto vertices = List<Vec2>::uninitialized(LINE_CAP_POINT_COUNT * 2);
+			f32 angle = (line->first - line->second).angle();
+
+			for (i64 i = 0; i < LINE_CAP_POINT_COUNT * 2; i++) {
+				vertices[i] = cappedLineOutlineVertex(line->first, line->second, lineTool.width, i, LINE_CAP_POINT_COUNT);
+				//vertices[i] = regularPolygonVertex(polygon->center, polygon->radius, polygon->firstVertexAngle, i, regularPolygonTool.vertexCount);
+			}
+			shape->initializeFromSimplePolygon(constView(vertices));
+			createObject(EditorShape(shape.id));
+		}
+		break;
 	}
 
 	case ELLIPSE: {
@@ -566,6 +585,7 @@ void Editor::gui() {
 			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
 			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
+			{ ToolType::LINE, "line", "Left click to pick endpoints." },
 			{ ToolType::REGULAR_POLYGON, "regular polygon", "Left click to pick center and radius" },
 			{ ToolType::BOOLEAN_SHAPE_OPERATIONS, "boolean shape operations", "Select left hand size using left click and right hand side right click. Press shift to apply."},
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
@@ -606,10 +626,18 @@ void Editor::gui() {
 			rigidBodyGui();
 			break;
 
+			// TODO: Make those gui's use Gui::
 		case REGULAR_POLYGON:
 			ImGui::SeparatorText("regular polygon");
 			ImGui::InputInt("number of vertices", &regularPolygonTool.vertexCount);
 			regularPolygonTool.vertexCount = std::max(3, regularPolygonTool.vertexCount);
+			rigidBodyGui();
+			break;
+
+		case LINE:
+			ImGui::SeparatorText("line");
+			ImGui::InputFloat("width", &lineTool.width);
+			lineTool.width = std::max(Constants::CELL_SIZE * 2, lineTool.width);
 			rigidBodyGui();
 			break;
 
@@ -908,6 +936,11 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		regularPolygonTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
 		break;
+	}
+
+	case LINE: {
+		lineTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
+		renderer.gfx.drawFilledTriangles();
 	}
 
 	case ELLIPSE: {
@@ -2246,11 +2279,49 @@ void Editor::RegularPolygonTool::render(GameRenderer& renderer, Vec2 cursorPos, 
 		Vec2 previous = getVertex(vertexCount - 1);
 		for (i64 i = 0; i < vertexCount; i++) {
 			const auto current = getVertex(i);
-			renderer.gfx.lineTriangulated(previous, current, renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
+			renderer.gfx.lineTriangulated(previous, current, renderer.outlineWidth(), renderer.outlineColor(color.xyz(), isStaticSetting));
 			previous = current;
 		}
 	}
 	
+}
+
+std::optional<std::pair<Vec2, Vec2>> Editor::LineTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
+	if (cursorRightDown) {
+		endpoint0 = std::nullopt;
+		return std::nullopt;
+	}
+
+	if (!cursorLeftDown) {
+		return std::nullopt;
+	}
+
+	if (!endpoint0.has_value()) {
+		endpoint0 = cursorPos;
+		return std::nullopt;
+	}
+
+	const auto result = std::pair<Vec2, Vec2>{ *endpoint0, cursorPos };
+	endpoint0 = std::nullopt;
+	return result;
+}
+
+void Editor::LineTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	if (!endpoint0.has_value()) {
+		return;
+	}
+
+	const auto vertexCount = cappedLineOutlineVertexCount(LINE_CAP_POINT_COUNT);
+	auto getVertex = [&](i32 i) {
+		return cappedLineOutlineVertex(*endpoint0, cursorPos, width, i, LINE_CAP_POINT_COUNT);
+	};
+
+	auto previous = getVertex(vertexCount - 1);
+	for (i64 i = 0; i < vertexCount; i++) {
+		const auto current = getVertex(i);
+		renderer.gfx.lineTriangulated(previous, current, renderer.outlineWidth(), renderer.outlineColor(color.xyz(), isStaticSetting));
+		previous = current;
+	}
 }
 
 Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)
