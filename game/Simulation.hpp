@@ -4,6 +4,7 @@
 #include <List.hpp>
 #include <game/GameInput.hpp>
 #include <game/Box2d.hpp>
+#include <game/Shared.hpp>
 #include <game/GameRenderer.hpp>
 #include <game/SimulationSettings.hpp>
 #include <game/InputButton.hpp>
@@ -14,13 +15,21 @@ enum class CellType : u8 {
 };
 
 struct Simulation {
+	struct Result {
+		bool switchToEditor;
+	};
+
 	Simulation();
 
 	f32 realtimeDt;
 
-	void update(GameRenderer& renderer, const GameInput& input);
+	Result update(GameRenderer& renderer, const GameInput& input, bool hideGui);
+	bool gui();
+
 	void waveSimulationUpdate(f32 simulationDt);
 	void render(GameRenderer& renderer);
+
+	void runEmitter(Vec2 pos, f32 strength, bool oscillate, f32 period, f32 phaseOffset);
 
 	void reset();
 
@@ -105,6 +114,11 @@ struct Simulation {
 	Camera camera;
 
 	SimulationSettings simulationSettings;
+
+	f32 emitterStrengthSetting = 100.0f;
+	bool emitterOscillateSetting = false;
+	f32 emitterPeriodSetting = 1.0f;
+	f32 emitterPhaseOffsetSetting = 0.0f;
 
 	Array2d<f32> u;
 	Array2d<f32> u_t;

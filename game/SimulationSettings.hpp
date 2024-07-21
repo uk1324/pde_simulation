@@ -13,6 +13,7 @@ enum class SimulationBoundaryCondition {
 struct SimulationSettings {
 	static SimulationSettings makeDefault();
 
+	bool paused;
 	f32 timeScale;
 	i32 rigidbodySimulationSubStepCount;
 	i32 waveEquationSimulationSubStepCount;
@@ -22,9 +23,8 @@ struct SimulationSettings {
 	SimulationBoundaryCondition leftBoundaryCondition;
 	SimulationBoundaryCondition rightBoundaryCondition;
 
-	bool dampingEnabled;
 	f32 dampingPerSecond;
-
-	bool speedDampingEnabled;
 	f32 speedDampingPerSecond;
 };
+
+void simulationSettingsGui(SimulationSettings& settings);

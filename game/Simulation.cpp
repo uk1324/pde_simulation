@@ -1,8 +1,8 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <Gui.hpp>
 #include <engine/Math/Constants.hpp>
 #include <game/RelativePositions.hpp>
-#include <imgui/imgui.h>
 #include <engine/Math/ShapeAabb.hpp>
 #include <engine/Math/Rotation.hpp>
 #include <engine/Math/PointInShape.hpp>
@@ -16,7 +16,6 @@
 #include <game/Shaders/waveData.hpp>
 #include <game/Shaders/waveDisplayData.hpp>
 #include <gfx/Instancing.hpp>
-#include <game/Shared.hpp>
 #include <glad/glad.h>
 #include <game/Constants.hpp>
 
@@ -59,8 +58,6 @@ Aabb simulationPolygonAabb(View<const Vec2> verts, Vec2 translation, f32 rotatio
 	return Aabb(Vec2(0.0f), Vec2(0.0f));
 }
 
-#include <game/Demos/WaveEquationDemo..hpp>
-
 Simulation::Simulation()
 	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
 	, simulationSettings(SimulationSettings::makeDefault())
@@ -81,8 +78,6 @@ Simulation::Simulation()
 	, getShapesResult(List<b2ShapeId>::empty())
 	, realtimeDt(1.0f / 60.0f)
 	, simulationElapsed(0.0f) {
-
-	//runWaveEquationDemo();
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -116,22 +111,18 @@ Simulation::Simulation()
 	}
 }
 
-void Simulation::update(GameRenderer& renderer, const GameInput& input) {
+Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& input, bool hideGui) {
+	bool switchToEditor = false;
+	if (!hideGui) {
+		switchToEditor = gui();
+	}
+
 	const auto simulationDt = realtimeDt * simulationSettings.timeScale;
 	simulationElapsed += simulationDt;
 
-	auto gridBounds = displayGridBounds();
-
-	const auto cursorPos = Input::cursorPosClipSpace() * camera.clipSpaceToWorldSpace();
-	const auto cursorDisplayGridPos = positionToGridPositionInGrid(cursorPos, simulationGridBounds(), displayGrid.size());
-	std::optional<Vec2T<i64>> cursorSimulationGridPos;
-	if (cursorDisplayGridPos.has_value()) {
-		cursorSimulationGridPos = *cursorDisplayGridPos + Vec2T<i64>(1);
-	}
 	// Could add option to change to mouse button down
-	if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-		fillCircle(u, *cursorSimulationGridPos, 3, 100.0f);
-		//fillCircle(u_t, *cursorSimulationGridPos, 5, 100.0f);
+	if (Input::isMouseButtonHeld(MouseButton::RIGHT)) {
+		runEmitter(input.cursorPos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
 	}
 
 	// line segment wave
@@ -223,18 +214,7 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 		}
 
 		const auto pos = getEmitterPos(emitter);
-		const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize);
-
-		f32 strength;
-		if (emitter.oscillate) {
-			strength = sin((simulationElapsed / emitter.period + emitter.phaseOffset) * TAU<f32>);
-			//strength = std::max(0.0f, ) * emitter.strength;
-			strength *= emitter.strength;
-		} else {
-			strength = emitter.strength;
-		}
-
-		fillCircle(u, gridPosition, 3, strength);
+		runEmitter(pos, emitter.strength, emitter.oscillate, emitter.period, emitter.phaseOffset);
 	}
 
 	for (const auto& joint : revoluteJoints) { 
@@ -268,7 +248,7 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 
 	cameraMovement(camera, input, realtimeDt);
 	
-	updateMouseJoint(cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
+	updateMouseJoint(input.cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
 
 	b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
@@ -336,6 +316,36 @@ void Simulation::update(GameRenderer& renderer, const GameInput& input) {
 	}
 
 	render(renderer);
+
+	return Result{
+		.switchToEditor = switchToEditor
+	};
+}
+
+bool Simulation::gui() {
+	ImGui::Begin(simulationSimulationSettingsWindowName);
+
+	bool switchToEditor = ImGui::Button("switch to editor");
+	ImGui::SetItemTooltip("Tab");
+
+	ImGui::SeparatorText("emitter");
+	{
+		ImGui::TextDisabled("(?)");
+		ImGui::SetItemTooltip("use right click to activate emitter under cursor");
+
+		if (gameBeginPropertyEditor("simulationEmitterSettings")) {
+			emitterSettings(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
+			Gui::endPropertyEditor();
+		}
+		Gui::popPropertyEditor();
+	}
+	
+	ImGui::SeparatorText("simulation");
+	simulationSettingsGui(simulationSettings);
+
+	ImGui::End();
+
+	return switchToEditor;
 }
 
 void Simulation::waveSimulationUpdate(f32 simulationDt) {
@@ -418,7 +428,7 @@ void Simulation::waveSimulationUpdate(f32 simulationDt) {
 		}
 	}
 
-	if (simulationSettings.dampingEnabled) {
+	if (simulationSettings.dampingPerSecond != 1.0f) {
 		const auto scale = exp(simulationDt * log(simulationSettings.dampingPerSecond));
 		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
@@ -427,7 +437,7 @@ void Simulation::waveSimulationUpdate(f32 simulationDt) {
 		}
 	}
 
-	if (simulationSettings.speedDampingEnabled) {
+	if (simulationSettings.speedDampingPerSecond != 1.0f) {
 		const auto scale = exp(simulationDt * log(simulationSettings.speedDampingPerSecond));
 		for (i32 yi = 1; yi < simulationGridSize.y - 1; yi++) {
 			for (i32 xi = 1; xi < simulationGridSize.x - 1; xi++) {
@@ -650,6 +660,22 @@ void Simulation::render(GameRenderer& renderer) {
 	renderer.gfx.drawLines();
 	renderer.gfx.drawFilledTriangles();
 	glDisable(GL_BLEND);
+}
+
+void Simulation::runEmitter(Vec2 pos, f32 strength, bool oscillate, f32 period, f32 phaseOffset) {
+	const auto gridBounds = displayGridBounds();
+	const auto gridPosition = positionToGridPosition(pos, gridBounds, simulationGridSize);
+
+	f32 finalStrength;
+	if (oscillate) {
+		finalStrength = sin((simulationElapsed / period + phaseOffset) * TAU<f32>);
+		//strength = std::max(0.0f, ) * emitter.strength;
+		finalStrength *= strength;
+	} else {
+		finalStrength = strength;
+	}
+
+	fillCircle(u, gridPosition, 3, finalStrength);
 }
 
 void Simulation::reset() {

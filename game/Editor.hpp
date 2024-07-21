@@ -9,16 +9,21 @@
 #include <game/ParametricEllipse.hpp>
 #include <game/ParametricParabola.hpp>
 #include <game/Gizmo.hpp>
+#include <game/Shared.hpp>
 #include <clipper2/clipper.h>
 
 struct Editor {
+	struct Result {
+		bool switchToSimulation = false;
+	};
+
 	static Editor make();
 
-	void update(GameRenderer& renderer, const GameInput& input);
+	Result update(GameRenderer& renderer, const GameInput& input);
 	void selectToolUpdate(const GameInput& input);
 
-	void gui();
-	static bool beginPropertyEditor(const char* id);
+	Result gui();
+
 	void selectToolGui();
 	void entityGui(EditorEntityId id);
 	struct EntityGuiRigidBody {
@@ -162,7 +167,7 @@ struct Editor {
 	static bool collisionGui(u32& collisionCategories, u32& collisionMask);
 	void rigidBodyGui();
 
-	f32 emitterStrengthSetting = 5.0f;
+	f32 emitterStrengthSetting = EMITTER_STRENGTH_DEFAULT;
 	bool emitterOscillateSetting = false;
 	f32 emitterPeriodSetting = 1.0f;
 	f32 emitterPhaseOffsetSetting = 0.0f;

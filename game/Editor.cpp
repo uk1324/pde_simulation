@@ -10,13 +10,11 @@
 #include <engine/Math/PointInShape.hpp>
 #include <engine/Math/ShapeAabb.hpp>
 #include <engine/Input/Input.hpp>
-#include <game/Shared.hpp>
 #include <engine/Math/Color.hpp>
 #include <engine/Math/Rotation.hpp>
 #include <imgui/imgui.h>
 #include <Gui.hpp>
 #include <dependencies/earcut/earcut.hpp>
-#include <imgui/imgui_internal.h>
 #include <glad/glad.h>
 
 const auto ELLIPSE_SAMPLE_POINTS = 70;
@@ -43,7 +41,7 @@ Editor Editor::make() {
 	return editor;
 }
 
-void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
+Editor::Result Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 	rigidBodies.update();
 	auto input = originalInput;
 	if (isCursorSnappingEnabled(originalInput)) {
@@ -222,11 +220,12 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 
 	}
 	render(renderer, input);
-	gui();
+	Result result = gui();
 
 	// Apply the camera movement after the frame so the cursor pos isn't delayed. Another option would be to update the cursor pos after the movement. Or just query the cursor pos each time.
 	cameraMovement(camera, input, dt);
 
+	return result;
 }
 
 void Editor::selectToolUpdate(const GameInput& input) {
@@ -438,30 +437,30 @@ void Editor::selectToolUpdate(const GameInput& input) {
 	}
 }
 
-void Editor::gui() {
-	auto id = ImGui::DockSpaceOverViewport(
-		ImGui::GetMainViewport(), 
-		ImGuiDockNodeFlags_NoDockingOverCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
+Editor::Result Editor::gui() {
+	//auto id = ImGui::DockSpaceOverViewport(
+	//	ImGui::GetMainViewport(), 
+	//	ImGuiDockNodeFlags_NoDockingOverCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
 
-	const auto settingsWindowName = "settings";
-	const auto simulationSettingsWindowName = "simulation";
-	if (firstFrame) {
-		ImGui::DockBuilderRemoveNode(id);
-		ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
+	//const auto editorSettingsWindowName = "editor";
+	//const auto simulationSettingsWindowName = "simulation";
+	//if (firstFrame) {
+	//	ImGui::DockBuilderRemoveNode(id);
+	//	ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
 
-		//const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-		const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-		ImGui::DockBuilderSetNodeSize(leftId, ImVec2(400.0f, 1.0f));
+	//	//const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
+	//	const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
+	//	ImGui::DockBuilderSetNodeSize(leftId, ImVec2(0.2f * ImGui::GetIO().DisplaySize.x, 1.0f));
 
-		ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
-		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
+	//	ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
+	//	ImGui::DockBuilderDockWindow(editorSettingsWindowName, leftId);
 
-		ImGui::DockBuilderFinish(id);
+	//	ImGui::DockBuilderFinish(id);
 
-		ImGui::SetWindowFocus(settingsWindowName);
+	//	ImGui::SetWindowFocus(editorSettingsWindowName);
 
-		firstFrame = false;
-	}
+	//	firstFrame = false;
+	//}
 
 	//if (ImGui::BeginMainMenuBar()) {
 	//	if (ImGui::BeginMenu("cursor snap")) {
@@ -474,103 +473,16 @@ void Editor::gui() {
 	//	ImGui::EndMainMenuBar();
 	//}
 
-	auto boundaryConditionCombo = [](const char* text, SimulationBoundaryCondition& value) {
-		struct Entry {
-			SimulationBoundaryCondition type;
-			// Could add tooltip.
-		};
-
-		auto boundaryConditionName = [](SimulationBoundaryCondition s) {
-			switch (s) {
-				using enum SimulationBoundaryCondition;
-			case REFLECTING: return "reflecting";
-			case ABSORBING: return "absorbing";
-			}
-
-			CHECK_NOT_REACHED();
-			return "";
-		};
-
-		Entry entries[]{
-			{ SimulationBoundaryCondition::REFLECTING },
-			{ SimulationBoundaryCondition::ABSORBING }
-		};
-		const char* preview = boundaryConditionName(value);
-
-		Gui::leafNodeBegin(text);
-		if (ImGui::BeginCombo(Gui::prependWithHashHash(text), preview)) {
-			for (auto& entry : entries) {
-				const auto isSelected = entry.type == value;
-				if (ImGui::Selectable(boundaryConditionName(entry.type), isSelected)) {
-					value = entry.type;
-				}
-
-				if (isSelected) {
-					ImGui::SetItemDefaultFocus();
-				}
-
-			}
-			ImGui::EndCombo();
-		}
-	};
-	ImGui::Begin(simulationSettingsWindowName);
-	{
-		if (beginPropertyEditor("simulation settings")) {
-			Gui::inputI32("wave simulation substeps", simulationSettings.waveEquationSimulationSubStepCount);
-			simulationSettings.waveEquationSimulationSubStepCount = std::clamp(simulationSettings.waveEquationSimulationSubStepCount, 1, 20);
-
-			Gui::inputI32("rigidbody simulation substeps", simulationSettings.rigidbodySimulationSubStepCount);
-			simulationSettings.rigidbodySimulationSubStepCount = std::clamp(simulationSettings.rigidbodySimulationSubStepCount, 1, 20);
-
-			// TODO: undo redo
-			Gui::sliderFloat("time scale", simulationSettings.timeScale, 0.0f, 1.0f);
-			simulationSettings.timeScale = std::clamp(simulationSettings.timeScale, 0.0f, 1.0f);
-
-			Gui::checkbox("damping", simulationSettings.dampingEnabled);
-			if (simulationSettings.dampingEnabled) {
-				Gui::inputFloat("damping per second", simulationSettings.dampingPerSecond);
-				simulationSettings.dampingPerSecond = std::clamp(simulationSettings.dampingPerSecond, 0.0f, 1.0f);
-			}
-
-			Gui::checkbox("speed damping per second", simulationSettings.speedDampingEnabled);
-			if (simulationSettings.speedDampingEnabled) {
-				Gui::inputFloat("", simulationSettings.speedDampingPerSecond);
-				simulationSettings.speedDampingPerSecond = std::clamp(simulationSettings.speedDampingPerSecond, 0.0f, 1.0f);
-			}
-
-			Gui::endPropertyEditor();
-		}
-		Gui::popPropertyEditor();
-
-		ImGui::SeparatorText("boundary conditions");
-		if (beginPropertyEditor("boundary conditions")) {
-			boundaryConditionCombo("top", simulationSettings.topBoundaryCondition);
-			boundaryConditionCombo("bottom", simulationSettings.bottomBoundaryCondition);
-			boundaryConditionCombo("left", simulationSettings.leftBoundaryCondition);
-			boundaryConditionCombo("right", simulationSettings.rightBoundaryCondition);
-			Gui::endPropertyEditor();
-		}
-		Gui::popPropertyEditor();
-		auto setAllTo = [this](SimulationBoundaryCondition condition) {
-			simulationSettings.topBoundaryCondition = condition;
-			simulationSettings.bottomBoundaryCondition = condition;
-			simulationSettings.leftBoundaryCondition = condition;
-			simulationSettings.rightBoundaryCondition = condition;
-		};
-
-		if (ImGui::Button("set all to reflecting")) {
-			setAllTo(SimulationBoundaryCondition::REFLECTING);
-		}
-		if (ImGui::Button("set all to absorbing")) {
-			setAllTo(SimulationBoundaryCondition::ABSORBING);
-		}
-
-
-	}
+	ImGui::Begin(editorSimulationSettingsWindowName);
+	simulationSettingsGui(simulationSettings);
 	ImGui::End();
 
-	ImGui::Begin(settingsWindowName);
+	bool switchToSimulation = false;
+	ImGui::Begin(editorEditorSettingsWindowName);
 	{
+		switchToSimulation = ImGui::Button("run simulation");
+		ImGui::SetItemTooltip("Tab");
+
 
 		struct ToolDisplay {
 			ToolType type;
@@ -629,15 +541,25 @@ void Editor::gui() {
 			// TODO: Make those gui's use Gui::
 		case REGULAR_POLYGON:
 			ImGui::SeparatorText("regular polygon");
-			ImGui::InputInt("number of vertices", &regularPolygonTool.vertexCount);
-			regularPolygonTool.vertexCount = std::max(3, regularPolygonTool.vertexCount);
+			if (gameBeginPropertyEditor("regularPolygonSettings")) {
+				Gui::inputI32("sides", regularPolygonTool.vertexCount);
+				regularPolygonTool.vertexCount = std::max(3, regularPolygonTool.vertexCount);
+				Gui::endPropertyEditor();
+			}
+			Gui::popPropertyEditor();
 			rigidBodyGui();
 			break;
 
 		case LINE:
 			ImGui::SeparatorText("line");
-			ImGui::InputFloat("width", &lineTool.width);
-			lineTool.width = std::max(Constants::CELL_SIZE * 2, lineTool.width);
+			if (gameBeginPropertyEditor("lineSettings")) {
+				Gui::inputFloat("width", lineTool.width);
+				lineTool.width = std::max(Constants::CELL_SIZE * 2, lineTool.width);
+
+				Gui::endPropertyEditor();
+			}
+			Gui::popPropertyEditor();
+
 			rigidBodyGui();
 			break;
 
@@ -654,7 +576,7 @@ void Editor::gui() {
 			break;
 
 		case EMMITER:
-			if (beginPropertyEditor("emitterSettings")) {
+			if (gameBeginPropertyEditor("emitterSettings")) {
 				emitterGui(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting, emitterActivateOnSetting);
 				Gui::endPropertyEditor();
 			}
@@ -666,7 +588,7 @@ void Editor::gui() {
 			break;
 
 		case BOOLEAN_SHAPE_OPERATIONS: {
-			if (beginPropertyEditor("booleanShapeOperations")) {
+			if (gameBeginPropertyEditor("booleanShapeOperations")) {
 				shapeBooleanOperationsTool.gui();
 				Gui::endPropertyEditor();
 			}
@@ -680,10 +602,10 @@ void Editor::gui() {
 	ImGui::End();
 
 	polygonTool.invalidShapeModalGui();
-}
 
-bool Editor::beginPropertyEditor(const char* id) {
-	return Gui::beginPropertyEditor(id, Gui::PropertyEditorFlags::TableStetchToFit);
+	return Result{
+		.switchToSimulation = switchToSimulation
+	};
 }
 
 void Editor::selectToolGui() {
@@ -741,7 +663,7 @@ void Editor::entityGui(EditorEntityId id) {
 		ImGui::SeparatorText("rigid body");
 
 		bool modificationFinished = false;
-		if (beginPropertyEditor("rigidBody")) {
+		if (gameBeginPropertyEditor("rigidBody")) {
 			modificationFinished |= Gui::checkbox("is static", body->isStatic);
 			Gui::endPropertyEditor();
 		}
@@ -750,7 +672,7 @@ void Editor::entityGui(EditorEntityId id) {
 		ImGui::SeparatorText("material");
 		const auto oldMaterialType = body->material.type;
 		modificationFinished |= materialTypeComboGui(body->material.type);
-		if (beginPropertyEditor("material")) {
+		if (gameBeginPropertyEditor("material")) {
 			if (body->material.type == EditorMaterialType::TRANSIMISIVE && oldMaterialType != EditorMaterialType::TRANSIMISIVE) {
 				body->material.transimisive = materialTransimisiveSetting;
 			}
@@ -763,7 +685,7 @@ void Editor::entityGui(EditorEntityId id) {
 		Gui::popPropertyEditor();
 
 		ImGui::SeparatorText("shape");
-		if (beginPropertyEditor("rigidBodyShape")) {
+		if (gameBeginPropertyEditor("rigidBodyShape")) {
 			modificationFinished |= shapeGui(body->shape);
 			Gui::endPropertyEditor();
 		}
@@ -785,7 +707,7 @@ void Editor::entityGui(EditorEntityId id) {
 
 		bool modificationFinished = false;
 
-		if (beginPropertyEditor("emitterSettings")) {
+		if (gameBeginPropertyEditor("emitterSettings")) {
 			modificationFinished |= emitterGui(emitter->strength, emitter->oscillate, emitter->period, emitter->phaseOffset, emitter->activateOn);
 			Gui::endPropertyEditor();
 		}
@@ -1255,7 +1177,7 @@ Vec2 Editor::selectedEntitiesCenter() {
 bool Editor::revoluteJointGui(f32& motorSpeed, f32& motorMaxTorque, bool& motorAlwaysEnabled, std::optional<InputButton>& clockwiseKey, std::optional<InputButton>& counterclockwiseKey, bool& clockwiseKeyWatingForKey, bool& counterclockwiseKeyWatingForKey) {
 	bool modificationFinished = false;
 
-	if (beginPropertyEditor("simulation settings")) {
+	if (gameBeginPropertyEditor("simulation settings")) {
 
 		ImGui::SeparatorText("motor");
 
@@ -1400,7 +1322,7 @@ void Editor::shapeBooleanOperationsToolUpdate(Vec2 cursorPos, bool cursorLeftDow
 
 void Editor::rigidBodyGui() {
 	ImGui::SeparatorText("rigid body");
-	if (beginPropertyEditor("rigidBodyGui")) {
+	if (gameBeginPropertyEditor("rigidBodyGui")) {
 		Gui::checkbox("is static", isStaticSetting);
 		Gui::endPropertyEditor();
 	}
@@ -1472,7 +1394,7 @@ void Editor::materialSettingGui() {
 	case RELFECTING:
 		break;
 	case TRANSIMISIVE:
-		if (beginPropertyEditor("transmissiveSettings")) {
+		if (gameBeginPropertyEditor("transmissiveSettings")) {
 			transmissiveMaterialGui(materialTransimisiveSetting);
 			Gui::endPropertyEditor();
 		}
@@ -1519,14 +1441,14 @@ bool Editor::collisionGui(u32& collisionCategories, u32& collisionMask) {
 	};
 	bool modificationFinished = false;
 	ImGui::SeparatorText("collision groups");
-	if (beginPropertyEditor("collisionGroups")) {
+	if (gameBeginPropertyEditor("collisionGroups")) {
 		modificationFinished |= bitMaskGui(collisionCategories);
 		Gui::endPropertyEditor();
 	}
 	Gui::popPropertyEditor();
 
 	ImGui::SeparatorText("collide with");
-	if (beginPropertyEditor("collisionGroups")) {
+	if (gameBeginPropertyEditor("collisionGroups")) {
 		modificationFinished |= bitMaskGui(collisionMask);
 		Gui::endPropertyEditor();
 	}
@@ -1538,15 +1460,7 @@ bool Editor::collisionGui(u32& collisionCategories, u32& collisionMask) {
 bool Editor::emitterGui(f32& strength, bool& oscillate, f32& period, f32& phaseOffset, std::optional<InputButton>& activateOn) {
 	bool modificationFinished = false;
 
-	Gui::inputFloat("strength", strength);
-	modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
-	modificationFinished |= Gui::checkbox("oscillate", oscillate);
-	if (oscillate) {
-		Gui::inputFloat("period", period);
-		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
-		Gui::inputFloat("phase offset", phaseOffset);
-		modificationFinished |= ImGui::IsItemDeactivatedAfterEdit();
-	}
+	modificationFinished |= emitterSettings(strength, oscillate, period, phaseOffset);
 	Gui::leafNodeBegin("activate key");
 	modificationFinished |= inputButtonGui(activateOn, emitterWatingForKey);
 

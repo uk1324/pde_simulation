@@ -14,10 +14,14 @@ struct MainLoop {
 	MainLoop();
 
 	void update();
+	void switchFromEditorToSimulation();
+	void switchFromSimulationToEditor();
 
 	GameRenderer renderer;
 	Editor editor;
 	Simulation simulation;
+
+	bool hideGui = false;
 
 	enum class State {
 		EDITOR,
