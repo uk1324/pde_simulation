@@ -43,6 +43,10 @@ Editor Editor::make() {
 
 Editor::Result Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 	rigidBodies.update();
+	emitters.update();
+	revoluteJoints.update();
+	polygonShapes.update();
+
 	auto input = originalInput;
 	if (isCursorSnappingEnabled(originalInput)) {
 		Vec2 p = input.cursorPos;
@@ -495,7 +499,7 @@ Editor::Result Editor::gui() {
 			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius"},
 			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
 			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
-			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
+			{ ToolType::POLYGON, "polygon", "Left click to pick vertices. Press shift to finish drawing." },
 			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
 			{ ToolType::LINE, "line", "Left click to pick endpoints." },
 			{ ToolType::REGULAR_POLYGON, "regular polygon", "Left click to pick center and radius" },

@@ -12,6 +12,8 @@
 #include <engine/Math/Rotation.hpp>
 #include <engine/Math/Color.hpp>
 
+#pragma optimize( "", off )
+
 GameRenderer GameRenderer::make() {
 	auto gfx = Gfx2d::make();
 	auto waveVao = createInstancingVao<WaveShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo);
@@ -63,10 +65,12 @@ void GameRenderer::polygon(const List<Vec2>& vertices, const List<i32>& boundary
 				if (i == boundary.size() - 2) {
 					break;
 				}
-
+				i++;
 				continue;
 			}
-			gfx.lineTriangulated(tempVertices[boundary[i]], tempVertices[boundary[i + 1]], outlineWidth(), outlineColor);
+			const auto endpoint0 = tempVertices[boundary[i]];
+			const auto endpoint1 = tempVertices[boundary[i + 1]];
+			gfx.lineTriangulated(endpoint0, endpoint1, outlineWidth(), outlineColor);
 		}
 	}
 }
@@ -126,3 +130,5 @@ void GameRenderer::drawGrid() {
 	};
 	drawInstances(gridVao, gfx.instancesVbo, constView(instance), quad2dPtDrawInstances);
 }
+
+#pragma optimize( "", on )

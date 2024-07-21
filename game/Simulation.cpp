@@ -331,7 +331,7 @@ bool Simulation::gui() {
 	ImGui::SeparatorText("emitter");
 	{
 		ImGui::TextDisabled("(?)");
-		ImGui::SetItemTooltip("use right click to activate emitter under cursor");
+		ImGui::SetItemTooltip("use the right mouse button to activate emitter under cursor");
 
 		if (gameBeginPropertyEditor("simulationEmitterSettings")) {
 			emitterSettings(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
