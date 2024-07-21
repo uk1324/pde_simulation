@@ -58,6 +58,7 @@ struct Editor {
 		PARABOLA,
 		POLYGON,
 		RECTANGLE,
+		REGULAR_POLYGON,
 		BOOLEAN_SHAPE_OPERATIONS,
 		EMMITER,
 		REVOLUTE_JOINT,
@@ -89,6 +90,21 @@ struct Editor {
 		std::optional<Aabb> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
 		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
 	} rectangleTool;
+
+	struct RegularPolygonTool {
+		std::optional<Vec2> center;
+		i32 vertexCount = 6;
+
+		static f32 firstVertexAngle(Vec2 center, Vec2 cursorPos);
+		struct Result {
+			Vec2 center;
+			f32 radius;
+			f32 firstVertexAngle;
+		};
+
+		std::optional<Result> update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown);
+		void render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting);
+	} regularPolygonTool;
 
 	struct EllipseTool {
 		std::optional<Vec2> focus0;

@@ -53,8 +53,6 @@ Could do something with combining actions if there are 2 consecutive actions tha
 
 Google search forgets the redo undo after you unfocus.
 
-Line tool with an option to choose a flat ending or a rounded ending. 
-
 Chladni Plates aren't simulated by the wave equation
 https://physics.stackexchange.com/questions/90021/theory-behind-patterns-formed-on-chladni-plates
 https://msp.org/pjm/1967/22-1/pjm-v22-n1-p13-p.pdf
@@ -64,3 +62,22 @@ http://www.unige.ch/~gander/Preprints/Ritz.pdf
 https://www.google.com/search?client=firefox-b-d&q=Chladni+Plates+wave+equation
 https://www.google.com/search?client=firefox-b-d&q=nodal+lines.
 https://en.wikipedia.org/wiki/Hearing_the_shape_of_a_drum#/media/File:Eigenmodes_of_GWW_Isospectral_Domains.png
+
+Serialization versioning.
+Could put the number version on the whole file. Don't really see an advantage of putting in on smaller parts of the file as it is impossible to have parts of a file saved with different version numbers.
+Because json is used adding a new field (with a default value) doesn't break backwards and forwards compatibility.
+Removing a field would break backwards compatiblity (old versions can't load the new file), but doesn't break forwards compatiblity.
+If there is some change that can't be handled this easily then make 2 versions of the struct with the breaking change and load based on version.
+
+Line tool with an option to choose a flat ending or a rounded ending. 
+
+Handle window creating order using an enum. Just save the last active window.
+
+Rotation gizmo.
+
+Simulation settings
+emitter settings.
+
+Display settings
+grid checkbox
+border checkbox

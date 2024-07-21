@@ -117,6 +117,21 @@ void Editor::update(GameRenderer& renderer, const GameInput& originalInput) {
 		break;
 	}
 		
+	case REGULAR_POLYGON: {
+		const auto polygon = regularPolygonTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
+		if (polygon.has_value()) {
+			auto shape = createPolygonShape();
+			// @Performance:
+			auto vertices = List<Vec2>::uninitialized(regularPolygonTool.vertexCount);
+			for (i64 i = 0; i < regularPolygonTool.vertexCount; i++) {
+				vertices[i] = regularPolygonVertex(polygon->center, polygon->radius, polygon->firstVertexAngle, i, regularPolygonTool.vertexCount);
+			}
+			shape->initializeFromSimplePolygon(constView(vertices));
+			createObject(EditorShape(shape.id));
+		}
+		break;
+
+	}
 
 	case ELLIPSE: {
 		const auto ellipse = ellipseTool.update(input.cursorPos, input.cursorLeftDown, input.cursorRightDown);
@@ -415,8 +430,9 @@ void Editor::gui() {
 		ImGui::DockBuilderRemoveNode(id);
 		ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
 
+		//const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
 		const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-		ImGui::DockBuilderSetNodeSize(leftId, ImVec2(300.0f, 1.0f));
+		ImGui::DockBuilderSetNodeSize(leftId, ImVec2(400.0f, 1.0f));
 
 		ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
 		ImGui::DockBuilderDockWindow(settingsWindowName, leftId);
@@ -550,6 +566,7 @@ void Editor::gui() {
 			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
 			{ ToolType::POLYGON, "polygon", "Press shift to finish drawing." },
 			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
+			{ ToolType::REGULAR_POLYGON, "regular polygon", "Left click to pick center and radius" },
 			{ ToolType::BOOLEAN_SHAPE_OPERATIONS, "boolean shape operations", "Select left hand size using left click and right hand side right click. Press shift to apply."},
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
 			{ ToolType::REVOLUTE_JOINT, "revolute", "Left click to create joint." },
@@ -586,6 +603,13 @@ void Editor::gui() {
 			break;
 
 		case RECTANGLE:
+			rigidBodyGui();
+			break;
+
+		case REGULAR_POLYGON:
+			ImGui::SeparatorText("regular polygon");
+			ImGui::InputInt("number of vertices", &regularPolygonTool.vertexCount);
+			regularPolygonTool.vertexCount = std::max(3, regularPolygonTool.vertexCount);
 			rigidBodyGui();
 			break;
 
@@ -876,6 +900,12 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		
 	case RECTANGLE: {
 		rectangleTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
+		renderer.gfx.drawFilledTriangles();
+		break;
+	}
+
+	case REGULAR_POLYGON: {
+		regularPolygonTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
 		break;
 	}
@@ -2153,6 +2183,74 @@ void Editor::RectangleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 
 	renderer.gfx.addFilledTriangle(indices[0], indices[1], indices[2]);
 	renderer.gfx.addFilledTriangle(indices[0], indices[2], indices[3]);
 	renderer.gfx.polygonTriangulated(constView(vertices), renderer.outlineWidth(), renderer.outlineColor(color.xyz(), isStaticSetting));
+}
+
+std::optional<Editor::RegularPolygonTool::Result> Editor::RegularPolygonTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
+	if (cursorRightDown) {
+		center = std::nullopt;
+		return std::nullopt;
+	}
+
+	if (!cursorLeftDown) {
+		return std::nullopt;
+	}
+
+	if (!center.has_value()) {
+		center = cursorPos;
+		return std::nullopt;
+	}
+
+	const Result result{
+		.center = *center,
+		.radius = (*center).distanceTo(cursorPos),
+		.firstVertexAngle = firstVertexAngle(*center, cursorPos)
+	};
+	center = std::nullopt;
+
+	if (result.radius < 0.001f) {
+		return std::nullopt;
+	}
+	return result;
+}
+
+f32 Editor::RegularPolygonTool::firstVertexAngle(Vec2 center, Vec2 cursorPos) {
+	return (cursorPos - center).angle();
+}
+
+void Editor::RegularPolygonTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	if (!center.has_value()) {
+		return;
+	}
+	const auto radius = distance(cursorPos, *center);
+	const auto angle = RegularPolygonTool::firstVertexAngle(*center, cursorPos);
+	auto getVertex = [&](i32 i) {
+		return regularPolygonVertex(*center, radius, angle, i, vertexCount);
+	};
+
+	{
+		const auto insideColor = renderer.insideColor(color, isStaticSetting);
+		auto addVertex = [&](Vec2 v) -> i32 {
+			return renderer.gfx.addFilledTriangleVertex(v, insideColor);
+		};
+
+		const auto centerI = addVertex(*center);
+		auto previousI = addVertex(getVertex(vertexCount - 1));
+		for (i64 i = 0; i < vertexCount; i++) {
+			const auto currentI = addVertex(getVertex(i));
+			renderer.gfx.addFilledTriangle(centerI, currentI, previousI);
+			previousI = currentI;
+		}
+	}
+
+	{
+		Vec2 previous = getVertex(vertexCount - 1);
+		for (i64 i = 0; i < vertexCount; i++) {
+			const auto current = getVertex(i);
+			renderer.gfx.lineTriangulated(previous, current, renderer.outlineWidth(), renderer.outlineColor(color.xyz(), false));
+			previous = current;
+		}
+	}
+	
 }
 
 Editor::RigidBodyTransform::RigidBodyTransform(Vec2 translation, f32 rotation)
