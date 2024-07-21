@@ -916,7 +916,8 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 		break;
 
 	case POLYGON: {
-		const auto outlineColor = renderer.outlineColor(GameRenderer::defaultColor, true);
+		const auto color = materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor);
+		const auto outlineColor = renderer.outlineColor(color.xyz(), false);
 		if (polygonTool.vertices.size() > 1) {
 			renderer.gfx.polylineTriangulated(constView(polygonTool.vertices), renderer.outlineWidth(), outlineColor, 10);
 		} else if (polygonTool.vertices.size() == 1) {
@@ -941,6 +942,7 @@ void Editor::render(GameRenderer& renderer, const GameInput& input) {
 	case LINE: {
 		lineTool.render(renderer, input.cursorPos, materialTypeToColor(materialTypeSetting, GameRenderer::defaultColor), isStaticSetting);
 		renderer.gfx.drawFilledTriangles();
+		break;
 	}
 
 	case ELLIPSE: {
@@ -1985,7 +1987,11 @@ std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool
 
 void Editor::CircleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
 	if (center.has_value()) {
-		renderer.disk(*center, center->distanceTo(cursorPos), (cursorPos - *center).angle(), color, renderer.outlineColor(color.xyz(), false), isStaticSetting);
+		const auto radius = center->distanceTo(cursorPos);
+		const auto angle = (cursorPos - *center).angle();
+		const auto outlineColor = renderer.outlineColor(color.xyz(), isStaticSetting);
+		renderer.gfx.circleTriangulated(*center, radius, renderer.outlineWidth(), outlineColor);
+		renderer.gfx.lineTriangulated(*center, *center + Vec2::fromPolar(angle, radius - renderer.outlineWidth() / 2.0f), renderer.outlineWidth(), outlineColor);
 	}
 }
 
@@ -2042,22 +2048,22 @@ std::optional<ParametricEllipse> Editor::EllipseTool::update(Vec2 cursorPos, boo
 }
 
 void Editor::EllipseTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 color, bool isStaticSetting) {
+	const auto outlineColor = renderer.outlineColor(color.xyz(), false);
 	if (focus0.has_value() && focus1.has_value()) {
 		const auto ellipse = ParametricEllipse::fromFociAndPointOnEllipse(*focus0, *focus1, cursorPos);
 
-		{
-			color = renderer.insideColor(color, isStaticSetting);
-			const auto center = renderer.gfx.addFilledTriangleVertex(ellipse.center, color);
-			auto previous = renderer.gfx.addFilledTriangleVertex(ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS), color);
-			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
-				const auto current = renderer.gfx.addFilledTriangleVertex(ellipse.sample(i, ELLIPSE_SAMPLE_POINTS), color);
-				renderer.gfx.addFilledTriangle(center, previous, current);
-				previous = current;
-			}
-		}
+		//{
+		//	color = renderer.insideColor(color, isStaticSetting);
+		//	const auto center = renderer.gfx.addFilledTriangleVertex(ellipse.center, color);
+		//	auto previous = renderer.gfx.addFilledTriangleVertex(ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS), color);
+		//	for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
+		//		const auto current = renderer.gfx.addFilledTriangleVertex(ellipse.sample(i, ELLIPSE_SAMPLE_POINTS), color);
+		//		renderer.gfx.addFilledTriangle(center, previous, current);
+		//		previous = current;
+		//	}
+		//}
 
 		{
-			const auto outlineColor = renderer.outlineColor(color.xyz(), false);
 			auto previous = ellipse.sample(ELLIPSE_SAMPLE_POINTS - 1, ELLIPSE_SAMPLE_POINTS);
 			for (i64 i = 0; i < ELLIPSE_SAMPLE_POINTS; i++) {
 				const auto pos = ellipse.sample(i, ELLIPSE_SAMPLE_POINTS);
@@ -2069,11 +2075,11 @@ void Editor::EllipseTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 co
 	}
 
 	if (focus0.has_value()) {
-		renderer.gfx.diskTriangulated(*focus0, renderer.outlineWidth(), Vec4(Color3::WHITE, 1.0f));
+		renderer.gfx.diskTriangulated(*focus0, renderer.outlineWidth(), Vec4(outlineColor, 1.0f));
 	}
 
 	if (focus1.has_value()) {
-		renderer.gfx.diskTriangulated(*focus1, renderer.outlineWidth(), Vec4(Color3::WHITE, 1.0f));
+		renderer.gfx.diskTriangulated(*focus1, renderer.outlineWidth(), Vec4(outlineColor, 1.0f));
 	}
 }
 
@@ -2209,12 +2215,12 @@ void Editor::RectangleTool::render(GameRenderer& renderer, Vec2 cursorPos, Vec4 
 		return;
 	}
 	const auto vertices = aabbVertices(Aabb::fromCorners(*corner, cursorPos));
-	i32 indices[4]{};
+	/*i32 indices[4]{};
 	for (i64 i = 0; i < vertices.size(); i++) {
 		indices[i] = renderer.gfx.addFilledTriangleVertex(vertices[i], renderer.insideColor(color, isStaticSetting));
-	}
-	renderer.gfx.addFilledTriangle(indices[0], indices[1], indices[2]);
-	renderer.gfx.addFilledTriangle(indices[0], indices[2], indices[3]);
+	}*/
+	/*renderer.gfx.addFilledTriangle(indices[0], indices[1], indices[2]);
+	renderer.gfx.addFilledTriangle(indices[0], indices[2], indices[3]);*/
 	renderer.gfx.polygonTriangulated(constView(vertices), renderer.outlineWidth(), renderer.outlineColor(color.xyz(), isStaticSetting));
 }
 
@@ -2260,20 +2266,20 @@ void Editor::RegularPolygonTool::render(GameRenderer& renderer, Vec2 cursorPos, 
 		return regularPolygonVertex(*center, radius, angle, i, vertexCount);
 	};
 
-	{
-		const auto insideColor = renderer.insideColor(color, isStaticSetting);
-		auto addVertex = [&](Vec2 v) -> i32 {
-			return renderer.gfx.addFilledTriangleVertex(v, insideColor);
-		};
+	//{
+	//	const auto insideColor = renderer.insideColor(color, isStaticSetting);
+	//	auto addVertex = [&](Vec2 v) -> i32 {
+	//		return renderer.gfx.addFilledTriangleVertex(v, insideColor);
+	//	};
 
-		const auto centerI = addVertex(*center);
-		auto previousI = addVertex(getVertex(vertexCount - 1));
-		for (i64 i = 0; i < vertexCount; i++) {
-			const auto currentI = addVertex(getVertex(i));
-			renderer.gfx.addFilledTriangle(centerI, currentI, previousI);
-			previousI = currentI;
-		}
-	}
+	//	const auto centerI = addVertex(*center);
+	//	auto previousI = addVertex(getVertex(vertexCount - 1));
+	//	for (i64 i = 0; i < vertexCount; i++) {
+	//		const auto currentI = addVertex(getVertex(i));
+	//		renderer.gfx.addFilledTriangle(centerI, currentI, previousI);
+	//		previousI = currentI;
+	//	}
+	//}
 
 	{
 		Vec2 previous = getVertex(vertexCount - 1);
