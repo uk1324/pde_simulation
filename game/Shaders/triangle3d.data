@@ -1,0 +1,16 @@
+struct Vertex3Pnc {
+	Vec3 position;
+	Vec3 normal;
+	Vec3 color;
+}
+
+shader Triangle3d {
+	vertexStruct = Vertex3Pnc;
+	vertUniforms = {
+		Mat4 transform;
+	};
+	vertOut = {
+		Vec3 normal;
+		Vec3 color;
+	};
+}

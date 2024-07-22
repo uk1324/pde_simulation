@@ -8,6 +8,7 @@
 #include <game/GameRenderer.hpp>
 #include <game/SimulationSettings.hpp>
 #include <game/InputButton.hpp>
+#include <game/SimulationDisplay3d.hpp>
 
 enum class CellType : u8 {
 	EMPTY,
@@ -19,7 +20,14 @@ struct Simulation {
 		bool switchToEditor;
 	};
 
-	Simulation();
+	Simulation(Gfx2d& gfx);
+
+	enum class DisplayMode {
+		DISPLAY_2D,
+		DISPLAY_3D
+	};
+
+	DisplayMode displayMode = DisplayMode::DISPLAY_2D;
 
 	f32 realtimeDt;
 
@@ -27,14 +35,16 @@ struct Simulation {
 	bool gui();
 
 	void waveSimulationUpdate(f32 simulationDt);
-	void render(GameRenderer& renderer);
+	void render(GameRenderer& renderer, Vec3 grid3dScale);
 
 	void runEmitter(Vec2 pos, f32 strength, bool oscillate, f32 period, f32 phaseOffset);
+
 
 	void reset();
 
 	Aabb displayGridBounds() const;
 	Aabb simulationGridBounds() const;
+	Vec3 grid3dScale();
 
 	f32 simulationElapsed;
 
@@ -44,7 +54,7 @@ struct Simulation {
 
 	b2BodyId boundariesBodyId;
 
-	bool debugDisplay = true;
+	bool debugDisplay = false;
 
 	enum class ShapeType {
 		CIRCLE,
@@ -133,4 +143,6 @@ struct Simulation {
 	Array2d<f32> displayGridTemp;
 	bool applyBlurToDisplayGrid = true;
 	Texture displayTexture;
+
+	SimulationDisplay3d display3d;
 };

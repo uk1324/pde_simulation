@@ -1,5 +1,7 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <engine/Math/Interpolation.hpp>
+#include <game/EditorEntities.hpp>
 #include <Timer.hpp>
 #include <Gui.hpp>
 #include <engine/Math/Constants.hpp>
@@ -30,72 +32,6 @@ i32 clamp(i32 i, i32 max) {
 	return i;
 }
 
-template<typename T>
-void drawLine(View2d<T> a, i32 y, f32 x0f, f32 x1f, T value) {
-	if (x0f > x1f) {
-		f32 temp = x0f;
-		x0f = x1f;
-		x1f = temp;
-	}
-	
-	i32 x0 = std::floor(x0f);
-	i32 x1 = std::ceil(x1f);
-
-	x0 = clamp(x0, a.sizeX());
-	x1 = clamp(x1, a.sizeX());
-	
-	T* address = &a(x0, y);
-	const auto count = x1 - x0 + 1;
-	for (i32 i = 0; i < count; i++) {
-		address[i] = value;
-	}
-}
-
-template<typename T>
-void fillBottomFlatTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
-	float invslope1 = (v2.x - v1.x) / (v2.y - v1.y);
-	float invslope2 = (v3.x - v1.x) / (v3.y - v1.y);
-
-	float curx1 = v1.x;
-	float curx2 = v1.x;
-
-	for (int scanlineY = std::ceil(v1.y); scanlineY <= std::floor(v2.y); scanlineY++) {
-		drawLine(a, scanlineY, curx1, curx2, value);
-		curx1 += invslope1;
-		curx2 += invslope2;
-	}
-}
-
-template<typename T>
-void fillTopFlatTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
-	float invslope1 = (v3.x - v1.x) / (v3.y - v1.y);
-	float invslope2 = (v3.x - v2.x) / (v3.y - v2.y);
-
-	float curx1 = v3.x;
-	float curx2 = v3.x;
-
-	for (int scanlineY = std::floor(v3.y); scanlineY > std::ceil(v1.y); scanlineY--) {
-		drawLine(a, scanlineY, curx1, curx2, value);
-		curx1 -= invslope1;
-		curx2 -= invslope2;
-	}
-}
-
-
-
-bool triangleContains(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 p) {
-	auto area0 = det(v1 - v0, p - v0);
-	auto area1 = det(v2 - v1, p - v1);
-	auto area2 = det(v0 - v2, p - v2);
-	//auto sign = [](float value) -> float { 
-	//	// "<=" So points on the triangle are also return true.
-	//	return value <= 0.0f ? -1.0f : 1.0f; 
-	//};
-	//return sign(area0) == sign(area1) && sign(area1) == sign(area2);
-	/*return area0 < 0.0f && area1 < 0.0f && area2 < 0.0f;*/
-	return area0 > 0.0f && area1 > 0.0f && area2 > 0.0f;
-}
-
 Aabb transformedTriangleAabb(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 position, Rotation rotation) {
 	Vec2 points[]{ 
 		rotation * v0 + position, 
@@ -104,8 +40,6 @@ Aabb transformedTriangleAabb(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 position, Rotation 
 	};
 	return Aabb::fromPoints(constView(points));
 }
-
-#include <immintrin.h>
 
 template<typename T>
 void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec2 translation, T value, Aabb gridBounds, Vec2T<i64> gridSize) {
@@ -116,16 +50,6 @@ void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec
 	const auto a1 = v2 - v1;
 	const auto a2 = v0 - v2;
 
-	const f32 asXsData[]{ a0.x, a1.x, a2.x, 1.0f };
-	const auto asXs = _mm_load_ps(asXsData);
-	const f32 asYsData[]{ a0.y, a1.y, a2.y, 0.0f };
-	const auto asYs = _mm_load_ps(asYsData);
-
-	const f32 vsXsData[]{ v0.x, v1.x, v2.x, 0.0f };
-	const auto vsXs = _mm_load_ps(vsXsData);
-	const f32 vsYsData[]{ v0.y, v1.y, v2.y, 0.0f };
-	const auto vsYs = _mm_load_ps(vsYsData);
-
 	const auto rotationInversed = rotation.inversed();
 	for (i64 yi = gridAabb.min.y; yi <= gridAabb.max.y; yi++) {
 		for (i64 xi = gridAabb.min.x; xi <= gridAabb.max.x; xi++) {
@@ -133,110 +57,24 @@ void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec
 			cellCenter -= translation;
 			cellCenter *= rotationInversed;
 
-
-			/*auto area0 = det(a0, b0);
-			auto area1 = det(a1, b1);
-			auto area2 = det(a2, b2);*/
-
-			/*auto area0 = det(diff0, cellCenter - v0);
-			auto area1 = det(diff1, cellCenter - v1);
-			auto area2 = det(diff2, cellCenter - v2);*/
-
-			//const auto b0 = cellCenter - v0;
-			//auto area0 = a0.x * b0.y - b0.x * a0.y;
-			//if (area0 <= 0.0f) {
-			//	continue;
-			//}
-			//const auto b1 = cellCenter - v1;
-			//auto area1 = a1.x * b1.y - b1.x * a1.y;
-			//if (area1 <= 0.0f) {
-			//	continue;
-			//}
-			//const auto b2 = cellCenter - v2;
-			//auto area2 = a2.x * b2.y - b2.x * a2.y;
-			//if (area2 <= 0.0f) {
-			//	continue;
-			//}
-			//a(xi, yi) = value;
-
-
-			//const auto b0 = cellCenter - v0;
-			//const auto b1 = cellCenter - v1;
-			//const auto b2 = cellCenter - v2;
-
-			//auto area0 = a0.x * b0.y - b0.x * a0.y;
-			//auto area1 = a1.x * b1.y - b1.x * a1.y;
-			//auto area2 = a2.x * b2.y - b2.x * a2.y;
-
-			//if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
-			//	a(xi, yi) = value;
-			//}
-
-			//const auto b0 = cellCenter - v0;
-			//const auto b1 = cellCenter - v1;
-			//const auto b2 = cellCenter - v2;
-
-			//auto area0 = a0.x * b0.y - b0.x * a0.y;
-			//auto area1 = a1.x * b1.y - b1.x * a1.y;
-			//auto area2 = a2.x * b2.y - b2.x * a2.y;
-
-			//if ((area0 > 0.0f) & (area1 > 0.0f) & (area2 > 0.0f)) {
-			//	a(xi, yi) = value;
-			//}
-
-			f32 cXsData[] { cellCenter.x, cellCenter.x, cellCenter.x, 1.0f };
-			f32 cYsData[] { cellCenter.y, cellCenter.y, cellCenter.y, 1.0f };
-
-			const auto cXs = _mm_load_ps(cXsData);
-			const auto cYs = _mm_load_ps(cYsData);
-			const auto bsXs = _mm_sub_ps(cXs, vsXs);
-			const auto bsYs = _mm_sub_ps(cYs, vsYs);
-
-			const auto areas = _mm_sub_ps(_mm_mul_ps(asXs, bsYs), _mm_mul_ps(bsXs, asYs));
-
-			f32 result[4];
-			_mm_store_ps(result, areas);
-			if (result[0] > 0.0f && result[1] > 0.0f && result[2] > 0.0f) {
-				a(xi, yi) = value;
+			const auto b0 = cellCenter - v0;
+			auto area0 = a0.x * b0.y - b0.x * a0.y;
+			if (area0 <= 0.0f) {
+				continue;
 			}
-
-			/*f32 zerosData[]{ 0.0f, 0.0f, 0.0f, 0.0f };
-			const auto zeros = _mm_load_ps(zerosData);
-			const auto biggerThanZero = _mm_castps_si128(_mm_cmp_ps(areas, zeros, _CMP_GT_OQ));
-			if (_mm_test_all_ones(biggerThanZero)) {
-				a(xi, yi) = value;
-			}*/
-
-			/*if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
-			}*/
+			const auto b1 = cellCenter - v1;
+			auto area1 = a1.x * b1.y - b1.x * a1.y;
+			if (area1 <= 0.0f) { 
+				continue;
+			}
+			const auto b2 = cellCenter - v2;
+			auto area2 = a2.x * b2.y - b2.x * a2.y;
+			if (area2 <= 0.0f) {
+				continue;
+			}
+			a(xi, yi) = value;
 		}
 	}
-
-	//if (v1.y > v2.y) {
-	//	std::swap(v1, v2);
-	//}
-	//if (v2.y > v3.y) {
-	//	std::swap(v2, v3);
-	//} 
-	//if (v1.y > v2.y) {
-	//	std::swap(v1, v2);
-	//}
-	///* at first sort the three vertices by y-coordinate ascending so v1 is the topmost vertice */
-
-	////sortVerticesAscendingByY();
-
-	///* here we know that v1.y <= v2.y <= v3.y */
-	//if (v2.y == v3.y) {
-	//	fillBottomFlatTriangle(a, v1, v2, v3, value);
-	//} else if (v1.y == v2.y) {
-	//	fillTopFlatTriangle(a, v1, v2, v3, value);
-	//} else {
-	//	/* general case - split the triangle in a topflat and bottom-flat one */
-	//	const auto v4 = Vec2(
-	//		(int)(v1.x + ((float)(v2.y - v1.y) / (float)(v3.y - v1.y)) * (v3.x - v1.x)), v2.y);
-	//	fillBottomFlatTriangle(a, v1, v2, v4, value);
-	//	fillTopFlatTriangle(a, v2, v4, v3, value);
-	//}
 }
 
 bool isPointInSimulationPolygon(View<const Vec2> verts, Vec2 p) {
@@ -278,7 +116,7 @@ Aabb simulationPolygonAabb(View<const Vec2> verts, Vec2 translation, f32 rotatio
 	return Aabb(Vec2(0.0f), Vec2(0.0f));
 }
 
-Simulation::Simulation()
+Simulation::Simulation(Gfx2d& gfx)
 	: simulationGridSize(Constants::DEFAULT_GRID_SIZE.x + 2, Constants::DEFAULT_GRID_SIZE.y + 2)
 	, simulationSettings(SimulationSettings::makeDefault())
 	, u(Array2d<f32>::filled(simulationGridSize.x, simulationGridSize.y, 0.0f))
@@ -297,7 +135,8 @@ Simulation::Simulation()
 	, mouseJoint(b2_nullJointId)
 	, getShapesResult(List<b2ShapeId>::empty())
 	, realtimeDt(1.0f / 60.0f)
-	, simulationElapsed(0.0f) {
+	, simulationElapsed(0.0f)
+	, display3d(SimulationDisplay3d::make(gfx.instancesVbo)) {
 
 	{
 		b2WorldDef worldDef = b2DefaultWorldDef();
@@ -327,7 +166,45 @@ Simulation::Simulation()
 
 		b2Polygon right = b2MakeOffsetBox(halfWidth, boundsSize.y / 2.0f, b2Vec2{ .x = (boundsSize.x / 2.0f + halfWidth), .y = 0.0f }, 0.0f);
 		b2CreatePolygonShape(boundariesBodyId, &shapeDef, &right);
+	}
 
+	const auto grid3dSize = grid3dScale();
+	display3d.camera.angleAroundUpAxis = 0.0f;
+	display3d.camera.angleAroundRightAxis = PI<f32> / 4.0f;
+	const auto gridCenter = grid3dSize / 2.0f;
+	display3d.camera.position = gridCenter - display3d.camera.forward() * 4.0f;
+}
+
+std::optional<f32> rayPlaneIntersection(Vec3 planeNormal, Vec3 pointOnPlane, Vec3 rayStart, Vec3 rayDirection) {
+	f32 denom = dot(planeNormal, rayDirection);
+	if (abs(denom) > 1e-6) {
+		Vec3 p0l0 = pointOnPlane - rayStart;
+		f32 t = dot(p0l0, planeNormal) / denom;
+		return t;
+	}
+	return std::nullopt;
+}
+
+template<typename T>
+void fillShape(View2d<T> a, T value, Vec2 translation, f32 rotation, const Simulation::ShapeInfo& shape, Aabb gridBounds, Vec2T<i64> gridSize) {
+	if (shape.type == Simulation::ShapeType::POLYGON) {
+		for (i32 i = 0; i < shape.simplifiedTriangleVertices.size(); i += 3) {
+			const auto v0 = shape.simplifiedTriangleVertices[i];
+			const auto v1 = shape.simplifiedTriangleVertices[i + 1];
+			const auto v2 = shape.simplifiedTriangleVertices[i + 2];
+			fillTriangle(a, v0, v1, v2, rotation, translation, value, gridBounds, gridSize);
+		}
+	} else if (shape.type == Simulation::ShapeType::CIRCLE) {
+		const auto shapeAabb = circleAabb(translation, shape.radius);
+		const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, gridBounds, gridSize);
+		for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) {
+			for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) {
+				const auto cellCenter = Vec2(xi - 0.5f, yi - 0.5f) * Constants::CELL_SIZE + gridBounds.min;
+				if (isPointInCircle(translation, shape.radius, cellCenter)) {
+					a(xi, yi) = value;
+				}
+			}
+		}
 	}
 }
 
@@ -340,99 +217,45 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 	const auto simulationDt = realtimeDt * simulationSettings.timeScale;
 	simulationElapsed += simulationDt;
 
-	// Could add option to change to mouse button down
-	if (Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-		runEmitter(input.cursorPos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
+	if (displayMode == DisplayMode::DISPLAY_3D) {
+		if (Input::isKeyDown(KeyCode::ESCAPE)) {
+			Window::toggleCursor();
+		}
+
+		if (Window::isCursorEnabled()) {
+			ImGui::GetIO().ConfigFlags &= ~FLAGS_ENABLED_WHEN_CURSOR_DISABLED;
+		} else {
+			ImGui::GetIO().ConfigFlags |= FLAGS_ENABLED_WHEN_CURSOR_DISABLED;
+		}
 	}
 
-	// line segment wave
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonDown(MouseButton::RIGHT)) {
-	//	f32 xi = 60;
-	//	i64 off = 120;
-	//	for (i64 yi = 0; yi < 40; yi++) {
-	//		const auto y = yi + off;
-	//		const auto v = 25.0f;
-	//		u(xi, y) = v;
+	if (displayMode == DisplayMode::DISPLAY_2D) {
+		if (!Window::isCursorEnabled()) {
+			Window::enableCursor();
+		}
+	}
 
-	//		// This is just the derivative of the two states
-	//		// t0: 0 0 v 0 0
-	//		// t1: 0 0 0 v 0
+	const auto grid3dScale = this->grid3dScale();
 
-	//		// Central differencce
-	//		/*u_t(xi - 1, y) = -v / (2.0f * simulationDt);
-	//		u_t(xi, y) = 0.0f;
-	//		u_t(xi + 1, y) = v / (2.0f * simulationDt);*/
-
-	//		// Forward difference
-	//		u_t(xi, y) = -v / simulationDt;
-	//		u_t(xi + 1, y) = v / simulationDt;
-	//	}
-	//}
-
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonDown(MouseButton::RIGHT)) {
-	//	f32 xi = 60;
-	//	i64 off = 120;
-	//	for (i64 yi = 0; yi < 40; yi++) {
-	//		for (i64 xi = 0; xi < 40; xi++) {
-	//			auto t = xi / 40;
-	//			t -= 0.5;
-	//			t *= 2.0f;
-
-	//			const auto y = yi + off;
-	//			const auto x = xi + 50;
-	//			u(x, y) = exp(-1.0f / (1.0f - t * t)) * 15.0f;
-	//			u_t(x, y) = -2.0f * t * exp(-1.0f / (1.0f - t * t)) / pow((t * t - 1), 2.0f) * 100.0f;
-	//			/*u(xi + 1, y) = 0.0f;
-	//			u(xi - 1, y) = 0.0f;*/
-	//		}
-	//	}
-	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
-	//}
-
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
-	//	f32 xi = 60;
-	//	i64 off = 120;
-	//	for (i64 yi = 0; yi < 40; yi++) {
-	//		const auto y = yi + off;
-	//		u(xi, y) = 25.0f;
-	//		/*u(xi + 1, y) = 0.0f;
-	//		u(xi - 1, y) = 0.0f;*/
-
-	//		u_t(xi, y) = 0.0f;
-	//		u_t(xi + 1, y) = 210.0f;
-	//		u_t(xi - 1, y) = -210.0f;
-	//		u_t(xi + 2, y) = 0.0f;
-	//		u_t(xi - 2, y) = 0.0f;
-	//	}
-	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
-	//}
-	//if (cursorSimulationGridPos.has_value() && Input::isMouseButtonUp(MouseButton::RIGHT)) {
-	//	f32 xi = 60;
-	//	i64 off = 80;
-	//	for (i64 yi = 0; yi < 40; yi++) {
-	//		const auto y = yi + off;
-	//		/*u_t(xi, y) = 205.0f;
-	//		u_t(xi + 1, y) = -105.0f;*/
-
-	//		/*u(xi - 1, y) = 0.0f;*/
-	//		/*u(xi, y) = 0.0f;
-	//		u(xi + 1, y) = 0.0f;
-	//		u(xi + 2, y) = 0.0f;*/
-	//		//u(xi - 1, y) = -9.0f;
-	//		//u(xi + 2, y) = -5.0f; 
-	//		//u(xi, y) = -10.0f;
-	//		//u(xi -1, y) = -9.0f;
-	//		//u(xi + 1, y) = 10.0f;
-	//		////u(xi + 2, y) = -5.0f; 
-	//	}
-	//	//fillCircle(u, *cursorSimulationGridPos, 5, 100.0f);
-	//}
+	// Could add option to change to mouse button down
+	std::optional<Vec2> cursorPos;
+	if (displayMode == DisplayMode::DISPLAY_2D) {
+		cursorPos = input.cursorPos;
+	} else if (displayMode == DisplayMode::DISPLAY_3D && !Window::isCursorEnabled()) {
+		const auto rayStart = display3d.camera.position;
+		const auto rayDirection = display3d.camera.forward();
+		const auto intersectionT = rayPlaneIntersection(Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 0.0f), rayStart, rayDirection);
+		if (intersectionT.has_value() && (*intersectionT) > 0.0f) {
+			const Vec3 pos = rayStart + (*intersectionT) * rayDirection;
+			const auto displaySize = displayGridBounds().size();
+			cursorPos = Vec2(pos.x, pos.z) / Vec2(grid3dScale.x, grid3dScale.z) * displaySize;
+		}
+	}
 
 	for (const auto& emitter : emitters) {
 		if (emitter.activateOn.has_value() && !inputButtonIsHeld(*emitter.activateOn)) {
 			continue;
 		}
-
 		const auto pos = getEmitterPos(emitter);
 		runEmitter(pos, emitter.strength, emitter.oscillate, emitter.period, emitter.phaseOffset);
 	}
@@ -466,51 +289,32 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		}
 	}
 
-	cameraMovement(camera, input, realtimeDt);
+	if (displayMode == DisplayMode::DISPLAY_2D) {
+		cameraMovement(camera, input, realtimeDt);
+	} else if (displayMode == DisplayMode::DISPLAY_3D) {
+		if (!Window::isCursorEnabled()) {
+			display3d.camera.update(realtimeDt);
+		} else {
+			display3d.camera.lastMousePosition = std::nullopt;
+		}
+	}
 	
-	updateMouseJoint(input.cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
+	if (displayMode == DisplayMode::DISPLAY_3D) {
+		Input::ignoreImGuiWantCapture = true;
+	}
+	if (cursorPos.has_value() && Input::isMouseButtonHeld(MouseButton::RIGHT)) {
+		runEmitter(*cursorPos, emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
+	}
+
+	if (cursorPos.has_value()) {
+		updateMouseJoint(*cursorPos, Input::isMouseButtonDown(MouseButton::LEFT), Input::isMouseButtonDown(MouseButton::LEFT));
+	}
+	if (displayMode == DisplayMode::DISPLAY_3D) {
+		Input::ignoreImGuiWantCapture = false;
+	}
 
 	b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
-	fill(cellType, CellType::EMPTY);
-
-	#define FILL_SHAPE(TO_EXECUTE) \
-		const auto position = toVec2(b2Body_GetPosition(object.id)); \
-		const auto rotation = b2Body_GetAngle(object.id); \
-		switch (object.shape.type) { \
-			using enum ShapeType; \
-			\
-		case CIRCLE: { \
-			const auto shapeAabb = circleAabb(position, object.shape.radius); \
-			const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize); \
-			for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) { \
-				for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) { \
-					const auto cellCenter = calculateCellCenter(xi, yi); \
-					if (isPointInCircle(position, object.shape.radius, cellCenter)) { \
-						TO_EXECUTE \
-					} \
-				} \
-			} \
-			break; \
-		} \
-		case POLYGON: { \
-			const auto shapeAabb = simulationPolygonAabb(constView(object.shape.simplifiedOutline), position, rotation); \
-			const auto shapeGridAabb = aabbToClampedGridAabb(shapeAabb, simulationGridBounds, simulationGridSize); \
-			const auto rotate = Rotation(-rotation); \
-			for (i64 yi = shapeGridAabb.min.y; yi <= shapeGridAabb.max.y; yi++) { \
-				for (i64 xi = shapeGridAabb.min.x; xi <= shapeGridAabb.max.x; xi++) { \
-					auto cellCenter = calculateCellCenter(xi, yi); \
-					cellCenter -= position; \
-					cellCenter *= rotate; \
-					if (isPointInSimulationPolygon(constView(object.shape.simplifiedOutline), cellCenter)) { \
-						TO_EXECUTE \
-					} \
-				} \
-			} \
-			break; \
-		} \
-		\
-		}
 
 	const auto simulationGridBounds = this->simulationGridBounds();
 	auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
@@ -520,35 +324,28 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		return ((rotation * v) + translation) / Constants::CELL_SIZE;
 	};
 
-	Timer timer;
-	const auto cellTypeView = view2d(cellType);
-	for (const auto& object : reflectingObjects) {
-		const Rotation rotation(b2Body_GetAngle(object.id));
-		const auto translation = toVec2(b2Body_GetPosition(object.id));
-		if (object.shape.type == ShapeType::POLYGON) {
-			for (i32 i = 0; i < object.shape.simplifiedTriangleVertices.size(); i += 3) {
-				const auto v0 = object.shape.simplifiedTriangleVertices[i];
-				const auto v1 = object.shape.simplifiedTriangleVertices[i + 1];
-				const auto v2 = object.shape.simplifiedTriangleVertices[i + 2];
-				fillTriangle(cellTypeView, v0, v1, v2, rotation, translation, CellType::REFLECTING_WALL, simulationGridBounds, simulationGridSize);
-			/*	const auto v0 = transform(object.shape.simplifiedTriangleVertices[i], translation, rotation);
-				const auto v1 = transform(object.shape.simplifiedTriangleVertices[i + 1], translation, rotation);
-				const auto v2 = transform(object.shape.simplifiedTriangleVertices[i + 2], translation, rotation);*/
-				//fillTriangle(cellTypeView, v0, v1, v2, CellType::REFLECTING_WALL);
-			}
+	{
+		fill(cellType, CellType::EMPTY);
+		auto cellTypeView = view2d(cellType);
+		for (const auto& object : reflectingObjects) {
+			const auto rotation = b2Body_GetAngle(object.id);
+			const auto translation = toVec2(b2Body_GetPosition(object.id));
+			fillShape(cellTypeView, CellType::REFLECTING_WALL, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
 		}
-		//FILL_SHAPE(cellType(xi, yi) = CellType::REFLECTING_WALL;)
 	}
-	timer.guiTookMiliseconds("triangle render");
+
 	{
 		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
 		fill(speedSquared, pow(defaultSpeed, 2.0f));
+		auto speedSquaredView = view2d(speedSquared);
 		for (const auto& object : transmissiveObjects) {
 			if (object.matchBackgroundSpeedOfTransmission) {
 				continue;
 			}
 			const auto speedOfTransmitionSquared = pow(object.speedOfTransmition, 2.0f);
-			FILL_SHAPE(speedSquared(xi, yi) = speedOfTransmitionSquared;)
+			const auto rotation = b2Body_GetAngle(object.id);
+			const auto translation = toVec2(b2Body_GetPosition(object.id));
+			fillShape(speedSquaredView, speedOfTransmitionSquared, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
 		}
 	}
 
@@ -556,7 +353,7 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		waveSimulationUpdate(simulationDt / simulationSettings.waveEquationSimulationSubStepCount);
 	}
 
-	render(renderer);
+	render(renderer, grid3dScale);
 
 	return Result{
 		.switchToEditor = switchToEditor
@@ -572,7 +369,7 @@ bool Simulation::gui() {
 	ImGui::SeparatorText("emitter");
 	{
 		ImGui::TextDisabled("(?)");
-		ImGui::SetItemTooltip("use the right mouse button to activate emitter under cursor");
+		ImGui::SetItemTooltip("Use the right mouse button to activate emitter under cursor");
 
 		if (gameBeginPropertyEditor("simulationEmitterSettings")) {
 			emitterSettings(emitterStrengthSetting, emitterOscillateSetting, emitterPeriodSetting, emitterPhaseOffsetSetting);
@@ -583,6 +380,12 @@ bool Simulation::gui() {
 	
 	ImGui::SeparatorText("simulation");
 	simulationSettingsGui(simulationSettings);
+
+	ImGui::SeparatorText("display mode");
+	ImGui::TextDisabled("(?)");
+	ImGui::SetItemTooltip("use Escape to toggle cursor");
+	const char* names[]{ "2D", "3D" };
+	ImGui::Combo("display", reinterpret_cast<int*>(&displayMode), names, 2);
 
 	ImGui::End();
 
@@ -688,7 +491,7 @@ void Simulation::waveSimulationUpdate(f32 simulationDt) {
 	}
 }
 
-void Simulation::render(GameRenderer& renderer) {
+void Simulation::render(GameRenderer& renderer, Vec3 grid3dScale) {
 	camera.aspectRatio = Window::aspectRatio();
 	renderer.gfx.camera = camera;
 
@@ -719,6 +522,7 @@ void Simulation::render(GameRenderer& renderer) {
 				}
 			}
 		}
+		debugDisplayTexture.bind();
 		updatePixelTexture(debugDisplayGrid.data(), debugDisplayGrid.sizeX(), debugDisplayGrid.sizeY());
 
 		const auto displayGridBounds = this->displayGridBounds();
@@ -785,6 +589,7 @@ void Simulation::render(GameRenderer& renderer) {
 			}
 		}
 
+		displayTexture.bind();
 		updateFloatTexture(displayGrid.data(), displayGrid.sizeX(), displayGrid.sizeY());
 
 		const auto displayGridBounds = this->displayGridBounds();
@@ -797,110 +602,210 @@ void Simulation::render(GameRenderer& renderer) {
 		drawInstances(renderer.waveVao, renderer.gfx.instancesVbo, View<const WaveDisplayInstance>(&display, 1), quad2dPtDrawInstances);
 	}
 
-	renderer.drawBounds(displayGridBounds());
+	if (displayMode == DisplayMode::DISPLAY_2D) {
+		renderer.drawBounds(displayGridBounds());
 
-	auto renderShape = [this, &renderer](b2BodyId id, const ShapeInfo& shape, bool isTransmissive) {
-		const auto color = Vec4(GameRenderer::defaultColor, isTransmissive ? GameRenderer::transimittingShapeTransparency : 1.0f);
-		const auto position = toVec2(b2Body_GetPosition(id));
-		f32 rotation = b2Body_GetAngle(id);
-		const auto isStatic = b2Body_GetType(id) == b2_staticBody;
+		auto renderShape = [this, &renderer](b2BodyId id, const ShapeInfo& shape, bool isTransmissive) {
+			const auto color = Vec4(GameRenderer::defaultColor, isTransmissive ? GameRenderer::transimittingShapeTransparency : 1.0f);
+			const auto position = toVec2(b2Body_GetPosition(id));
+			f32 rotation = b2Body_GetAngle(id);
+			const auto isStatic = b2Body_GetType(id) == b2_staticBody;
 
-		switch (shape.type) {
-			using enum ShapeType;
-		case CIRCLE:
-			renderer.disk(position, shape.radius, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
-			break;
+			switch (shape.type) {
+				using enum ShapeType;
+			case CIRCLE:
+				renderer.disk(position, shape.radius, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
+				break;
 
-		case POLYGON:
-			renderer.polygon(shape.vertices, shape.boundary, shape.trianglesVertices, position, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
-			break;
-		}
-	};
-	renderer.gfx.drawLines();
-
-	/*for (const auto& a : reflectingObjects) {
-		const auto position = toVec2(b2Body_GetPosition(a.id));
-		f32 rotation = b2Body_GetAngle(a.id);
-		std::vector<Vec2> vs;
-		for (i64 i = 0; i < a.shape.simplifiedOutline.size(); i++) {
-			if (a.shape.simplifiedOutline[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+			case POLYGON:
+				renderer.polygon(shape.vertices, shape.boundary, shape.trianglesVertices, position, rotation, color, renderer.outlineColor(color.xyz(), false), isStatic);
 				break;
 			}
-			vs.push_back(Rotation(rotation) * a.shape.simplifiedOutline[i] + position);
-		}
-		renderer.gfx.polylineTriangulated(constView(vs), 0.1f, Color3::WHITE);
-	}*/
+		};
+		renderer.gfx.drawLines();
 
-	auto debugRenderPolygon = [this, &renderer](b2BodyId id) {
-		const auto position = toVec2(b2Body_GetPosition(id));
-		f32 rotation = b2Body_GetAngle(id);
-
-		getShapes(id);
-		for (auto& shape : getShapesResult) {
-			auto type = b2Shape_GetType(shape);
-			switch (type) {
-			case b2_polygonShape: {
-				const auto rotate = Rotation(rotation);
-				const auto polygon = b2Shape_GetPolygon(shape);
-
-				auto transform = [&](Vec2 v) -> Vec2 {
-					v *= rotate;
-					v += position;
-					return v;
-				};
-
-				i64 previous = polygon.count - 1;
-				for (i64 i = 0; i < polygon.count; i++) {
-					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
-					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
-					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 1.5f, Color3::WHITE / 2.0f);
-					previous = i;
+		/*for (const auto& a : reflectingObjects) {
+			const auto position = toVec2(b2Body_GetPosition(a.id));
+			f32 rotation = b2Body_GetAngle(a.id);
+			std::vector<Vec2> vs;
+			for (i64 i = 0; i < a.shape.simplifiedOutline.size(); i++) {
+				if (a.shape.simplifiedOutline[i] == Simulation::ShapeInfo::PATH_END_VERTEX) {
+					break;
 				}
-				break;
+				vs.push_back(Rotation(rotation) * a.shape.simplifiedOutline[i] + position);
 			}
+			renderer.gfx.polylineTriangulated(constView(vs), 0.1f, Color3::WHITE);
+		}*/
 
-			case b2_circleShape:
-			case b2_capsuleShape:
-			case b2_segmentShape:
-			case b2_smoothSegmentShape:
-			case b2_shapeTypeCount:
-				ASSERT_NOT_REACHED();
-				break;
+		auto debugRenderPolygon = [this, &renderer](b2BodyId id) {
+			const auto position = toVec2(b2Body_GetPosition(id));
+			f32 rotation = b2Body_GetAngle(id);
+
+			getShapes(id);
+			for (auto& shape : getShapesResult) {
+				auto type = b2Shape_GetType(shape);
+				switch (type) {
+				case b2_polygonShape: {
+					const auto rotate = Rotation(rotation);
+					const auto polygon = b2Shape_GetPolygon(shape);
+
+					auto transform = [&](Vec2 v) -> Vec2 {
+						v *= rotate;
+						v += position;
+						return v;
+					};
+
+					i64 previous = polygon.count - 1;
+					for (i64 i = 0; i < polygon.count; i++) {
+						const auto currentVertex = transform(toVec2(polygon.vertices[i]));
+						const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
+						renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 1.5f, Color3::WHITE / 2.0f);
+						previous = i;
+					}
+					break;
+				}
+
+				case b2_circleShape:
+				case b2_capsuleShape:
+				case b2_segmentShape:
+				case b2_smoothSegmentShape:
+				case b2_shapeTypeCount:
+					ASSERT_NOT_REACHED();
+					break;
+				}
+			}
+		};
+
+		for (const auto& object : reflectingObjects) {
+			renderShape(object.id, object.shape, false);
+			//debugRenderPolygon(object.id);
+		}
+		renderer.gfx.drawLines();
+
+		for (const auto& object : transmissiveObjects) {
+			renderShape(object.id, object.shape, true);
+		}
+
+		for (const auto& emitter : emitters) {
+			renderer.emitter(getEmitterPos(emitter), false, false);
+		}
+
+		auto getAbsolutePosition = [](b2BodyId id, Vec2 relativePosition) -> Vec2 {
+			const auto pos = toVec2(b2Body_GetPosition(id));
+			const auto rotation = b2Body_GetAngle(id);
+			return calculatePositionFromRelativePosition(relativePosition, pos, rotation);
+		};
+
+		for (const auto& joint : revoluteJoints) {
+			const auto pos0 = getAbsolutePosition(joint.body0, joint.positionRelativeToBody0);
+			const auto pos1 = getAbsolutePosition(joint.body1, joint.positionRelativeToBody1);
+			renderer.revoluteJoint(pos0, pos1);
+		}
+
+		renderer.gfx.drawDisks();
+		renderer.gfx.drawCircles();
+		renderer.gfx.drawLines();
+		renderer.gfx.drawFilledTriangles();
+		glDisable(GL_BLEND);
+	} else if (displayMode == DisplayMode::DISPLAY_3D) {
+		glViewport(0, 0, Window::size().x, Window::size().y);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_DEPTH_TEST);
+		display3d.renderGrid(renderer.gfx.instancesVbo, displayTexture, grid3dScale);
+
+		const auto topHeight = 0.4f;
+		const auto bottomHeight = -topHeight;
+
+		for (const auto& object : reflectingObjects) {
+			const auto isStatic = b2Body_GetType(object.id) == b2_staticBody;
+
+			auto addVertex = [&](Vec2 worldPos, f32 y) -> i32 {
+				const auto color = renderer.insideColor(Vec4(GameRenderer::defaultColor, 1.0f), isStatic).xyz();
+				const auto scale = Vec2(1.0f) / displayGridBounds().size() * Vec2(grid3dScale.x, grid3dScale.z);
+				return display3d.addVertex(Vertex3Pnc{
+					.position = Vec3(worldPos.x * scale.x, y, worldPos.y * scale.y),
+					.normal = Vec3(0.0f, 1.0f, 0.0f),
+					.color = color
+				});
+			};
+
+			const auto& s = object.shape;
+			const auto position = toVec2(b2Body_GetPosition(object.id));
+			const auto rotation = Rotation(b2Body_GetAngle(object.id));
+
+			if (s.type == ShapeType::POLYGON) {
+				const auto topIndicesOffset = display3d.trianglesVertices.size();
+				for (i32 i = 0; i < s.vertices.size(); i++) {
+					const auto vertex = rotation * s.vertices[i] + position;
+					addVertex(vertex, topHeight);
+				}
+				for (i32 i = 0; i < s.trianglesVertices.size(); i++) {
+					display3d.trianglesIndices.push_back(topIndicesOffset + s.trianglesVertices[i]);
+				}
+				const auto bottomIndicesOffset = display3d.trianglesVertices.size();
+				for (i32 i = 0; i < s.vertices.size(); i++) {
+					const auto vertex = rotation * s.vertices[i] + position;
+					addVertex(vertex, bottomHeight);
+				}
+
+				if (s.boundary.size() > 1) {
+					i64 startVertexI = 0;
+					for (i64 i = 0; i < s.boundary.size(); i++) {
+						if (s.boundary[i + 1] == EditorPolygonShape::PATH_END_INDEX) {
+							display3d.addQuad(
+								bottomIndicesOffset + s.boundary[i],
+								bottomIndicesOffset + s.boundary[startVertexI],
+								topIndicesOffset + s.boundary[startVertexI],
+								topIndicesOffset + s.boundary[i]
+							);
+
+							startVertexI = i + 2;
+							if (i == s.boundary.size() - 2) {
+								break;
+							}
+							i++;
+							continue;
+						}
+						display3d.addQuad(
+							bottomIndicesOffset + s.boundary[i], 
+							bottomIndicesOffset + s.boundary[i + 1],
+							topIndicesOffset + s.boundary[i + 1],
+							topIndicesOffset + s.boundary[i]
+						);
+					}
+				}
+
+				
+			} else if (s.type == ShapeType::CIRCLE) {
+				const auto center = addVertex(position, topHeight);
+				const auto firstPos = position + Vec2(s.radius, 0.0f);
+				const auto firstVertexTop = addVertex(firstPos, topHeight);
+				const auto firstVertexBottom = addVertex(firstPos, bottomHeight);
+				u32 oldVertexTop = firstVertexTop;
+				u32 oldVertexBottom = firstVertexBottom;
+				const auto vertices = renderer.gfx.calculateCircleVertexCount(s.radius);
+				for (i32 i = 1; i < vertices ; i++) {
+					const auto t = f32(i) / f32(vertices - 1);
+					const auto angle = lerp(0.0f, TAU<f32>, t);
+					const auto pos = position + Vec2::fromPolar(angle, s.radius);
+					const auto newVertexTop = addVertex(pos, topHeight);
+					const auto newVertexBottom = addVertex(pos, bottomHeight);
+					display3d.addQuad(oldVertexBottom, newVertexBottom, newVertexTop, oldVertexTop);
+					display3d.addTriangle(center, newVertexTop, oldVertexTop);
+					oldVertexTop = newVertexTop;
+					oldVertexBottom = newVertexBottom;
+				}
 			}
 		}
-	};
+		display3d.renderTriangles();
 
-	for (const auto& object : reflectingObjects) {
-		//renderShape(object.id, object.shape, false);
-		debugRenderPolygon(object.id);
-	}
-	renderer.gfx.drawLines();
 
-	for (const auto& object : transmissiveObjects) {
-		renderShape(object.id, object.shape, true);
-	}
-
-	for (const auto& emitter : emitters) {
-		renderer.emitter(getEmitterPos(emitter), false, false);
-	}
-
-	auto getAbsolutePosition = [](b2BodyId id, Vec2 relativePosition) -> Vec2 {
-		const auto pos = toVec2(b2Body_GetPosition(id));
-		const auto rotation = b2Body_GetAngle(id);
-		return calculatePositionFromRelativePosition(relativePosition, pos, rotation);
-	};
-
-	for (const auto& joint : revoluteJoints) {
-		const auto pos0 = getAbsolutePosition(joint.body0, joint.positionRelativeToBody0);
-		const auto pos1 = getAbsolutePosition(joint.body1, joint.positionRelativeToBody1);
-		renderer.revoluteJoint(pos0, pos1);
-	}
-
-	renderer.gfx.drawDisks();
-	renderer.gfx.drawCircles();
-	renderer.gfx.drawLines();
-	renderer.gfx.drawFilledTriangles();
-	glDisable(GL_BLEND);
+		glEnable(GL_BLEND);
+		renderer.gfx.diskTriangulated(camera.pos, 0.01f / camera.zoom, Vec4(Color3::WHITE, 0.2f));
+		glDisable(GL_BLEND);
+		renderer.gfx.drawFilledTriangles();
+		glDisable(GL_DEPTH_TEST);
+	}	
 }
 
 void Simulation::runEmitter(Vec2 pos, f32 strength, bool oscillate, f32 period, f32 phaseOffset) {
@@ -952,6 +857,11 @@ Aabb Simulation::simulationGridBounds() const {
 	bounds.min -= Vec2(Constants::CELL_SIZE);
 	bounds.min += Vec2(Constants::CELL_SIZE);
 	return bounds;
+}
+
+Vec3 Simulation::grid3dScale() {
+	const auto displaySize = displayGridBounds().size();
+	return Vec3(displaySize.x, 3.0f, displaySize.y) * 0.2f;
 }
 
 Vec2 Simulation::getEmitterPos(const Emitter& emitter) {

@@ -1,0 +1,11 @@
+struct Vertex2dP {
+	Vec2 pos;
+}
+
+shader GridDisplay {
+	vertexStruct = Vertex2dP;
+	vertInstance = {
+		Mat4 transform;
+		Vec3 scale;
+	};
+}

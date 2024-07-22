@@ -14,7 +14,8 @@
 
 MainLoop::MainLoop() 
 	: renderer(GameRenderer::make())
-	, editor(Editor::make()) {
+	, editor(Editor::make())
+	, simulation(renderer.gfx) {
 
 	ImGui::GetStyle().FrameRounding = 5;
 }
@@ -330,4 +331,6 @@ void MainLoop::switchFromEditorToSimulation() {
 void MainLoop::switchFromSimulationToEditor() {
 	currentState = State::EDITOR;
 	editor.camera = simulation.camera;
+	Window::enableCursor();
+	ImGui::GetIO().ConfigFlags &= ~FLAGS_ENABLED_WHEN_CURSOR_DISABLED;
 }

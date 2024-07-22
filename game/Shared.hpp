@@ -2,6 +2,7 @@
 
 #include <game/GameInput.hpp>
 #include <gfx2d/Camera.hpp>
+#include <imgui/imgui.h>
 
 void cameraMovement(Camera& camera, const GameInput& input, f32 dt);
 
@@ -14,3 +15,5 @@ bool gameBeginPropertyEditor(const char* id);
 bool emitterSettings(f32& strength, bool& oscillate, f32& period, f32& phaseOffset);
 
 const auto EMITTER_STRENGTH_DEFAULT = 5.0f;
+
+const auto FLAGS_ENABLED_WHEN_CURSOR_DISABLED = ImGuiConfigFlags_NavNoCaptureKeyboard |ImGuiConfigFlags_NoMouse | ImGuiConfigFlags_NoMouseCursorChange;
