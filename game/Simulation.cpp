@@ -19,6 +19,96 @@
 #include <glad/glad.h>
 #include <game/Constants.hpp>
 
+i32 clamp(i32 i, i32 max) {
+	if (i < 0) {
+		return 0;
+	}
+	if (i >= max) {
+		return max - 1;
+	}
+	return i;
+}
+
+template<typename T>
+void drawLine(View2d<T> a, i32 y, f32 x0f, f32 x1f, T value) {
+	if (x0f > x1f) {
+		f32 temp = x0f;
+		x0f = x1f;
+		x1f = temp;
+	}
+	
+	i32 x0 = std::floor(x0f);
+	i32 x1 = std::ceil(x1f);
+
+	x0 = clamp(x0, a.sizeX());
+	x1 = clamp(x1, a.sizeX());
+	
+	T* address = &a(x0, y);
+	const auto count = x1 - x0 + 1;
+	for (i32 i = 0; i < count; i++) {
+		address[i] = value;
+	}
+}
+
+template<typename T>
+void fillBottomFlatTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
+	float invslope1 = (v2.x - v1.x) / (v2.y - v1.y);
+	float invslope2 = (v3.x - v1.x) / (v3.y - v1.y);
+
+	float curx1 = v1.x;
+	float curx2 = v1.x;
+
+	for (int scanlineY = std::ceil(v1.y); scanlineY <= std::floor(v2.y); scanlineY++) {
+		drawLine(a, scanlineY, curx1, curx2, value);
+		curx1 += invslope1;
+		curx2 += invslope2;
+	}
+}
+
+template<typename T>
+void fillTopFlatTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
+	float invslope1 = (v3.x - v1.x) / (v3.y - v1.y);
+	float invslope2 = (v3.x - v2.x) / (v3.y - v2.y);
+
+	float curx1 = v3.x;
+	float curx2 = v3.x;
+
+	for (int scanlineY = std::floor(v3.y); scanlineY > std::ceil(v1.y); scanlineY--) {
+		drawLine(a, scanlineY, curx1, curx2, value);
+		curx1 -= invslope1;
+		curx2 -= invslope2;
+	}
+}
+
+template<typename T>
+void fillTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
+	if (v1.y > v2.y) {
+		std::swap(v1, v2);
+	}
+	if (v2.y > v3.y) {
+		std::swap(v2, v3);
+	} 
+	if (v1.y > v2.y) {
+		std::swap(v1, v2);
+	}
+	/* at first sort the three vertices by y-coordinate ascending so v1 is the topmost vertice */
+
+	//sortVerticesAscendingByY();
+
+	/* here we know that v1.y <= v2.y <= v3.y */
+	if (v2.y == v3.y) {
+		fillBottomFlatTriangle(a, v1, v2, v3, value);
+	} else if (v1.y == v2.y) {
+		fillTopFlatTriangle(a, v1, v2, v3, value);
+	} else {
+		/* general case - split the triangle in a topflat and bottom-flat one */
+		const auto v4 = Vec2(
+			(int)(v1.x + ((float)(v2.y - v1.y) / (float)(v3.y - v1.y)) * (v3.x - v1.x)), v2.y);
+		fillBottomFlatTriangle(a, v1, v2, v4, value);
+		fillTopFlatTriangle(a, v2, v4, v3, value);
+	}
+}
+
 bool isPointInSimulationPolygon(View<const Vec2> verts, Vec2 p) {
 	bool result = false;
 	
@@ -296,8 +386,23 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 	auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
 		return Vec2(x - 0.5f, y - 0.5f) * Constants::CELL_SIZE + simulationGridBounds.min;
 	};
+	auto transform = [](Vec2 v, Vec2 translation, Rotation rotation) {
+		return ((rotation * v) + translation) / Constants::CELL_SIZE;
+	};
+
+	const auto cellTypeView = view2d(cellType);
 	for (const auto& object : reflectingObjects) {
-		FILL_SHAPE(cellType(xi, yi) = CellType::REFLECTING_WALL;)
+		const Rotation rotation(b2Body_GetAngle(object.id));
+		const auto translation = toVec2(b2Body_GetPosition(object.id));
+		if (object.shape.type == ShapeType::POLYGON) {
+			for (i32 i = 0; i < object.shape.simplifiedTriangleVertices.size(); i += 3) {
+				const auto v0 = transform(object.shape.simplifiedTriangleVertices[i], translation, rotation);
+				const auto v1 = transform(object.shape.simplifiedTriangleVertices[i + 1], translation, rotation);
+				const auto v2 = transform(object.shape.simplifiedTriangleVertices[i + 2], translation, rotation);
+				fillTriangle(cellTypeView, v0, v1, v2, CellType::REFLECTING_WALL);
+			}
+		}
+		//FILL_SHAPE(cellType(xi, yi) = CellType::REFLECTING_WALL;)
 	}
 	{
 		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
@@ -612,7 +717,7 @@ void Simulation::render(GameRenderer& renderer) {
 				for (i64 i = 0; i < polygon.count; i++) {
 					const auto currentVertex = transform(toVec2(polygon.vertices[i]));
 					const auto previousVertex = transform(toVec2(polygon.vertices[previous]));
-					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 5.0f, Color3::WHITE / 2.0f);
+					renderer.gfx.line(previousVertex, currentVertex, renderer.outlineWidth() / 1.5f, Color3::WHITE / 2.0f);
 					previous = i;
 				}
 				break;
@@ -630,8 +735,8 @@ void Simulation::render(GameRenderer& renderer) {
 	};
 
 	for (const auto& object : reflectingObjects) {
-		renderShape(object.id, object.shape, false);
-		//debugRenderPolygon(object.id);
+		//renderShape(object.id, object.shape, false);
+		debugRenderPolygon(object.id);
 	}
 	renderer.gfx.drawLines();
 

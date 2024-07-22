@@ -44,7 +44,7 @@ struct Simulation {
 
 	b2BodyId boundariesBodyId;
 
-	bool debugDisplay = false;
+	bool debugDisplay = true;
 
 	enum class ShapeType {
 		CIRCLE,
@@ -54,6 +54,7 @@ struct Simulation {
 	struct ShapeInfo {
 		ShapeType type;
 		List<Vec2> simplifiedOutline;
+		List<Vec2> simplifiedTriangleVertices;
 		List<Vec2> vertices;
 		List<i32> boundary;
 		List<i32> trianglesVertices;

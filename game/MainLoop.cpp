@@ -132,6 +132,7 @@ void MainLoop::switchFromEditorToSimulation() {
 
 		// TODO: Could reuse vertices
 		auto simplifiedOutline = List<Vec2>::empty();
+		auto simplifiedTriangleVertices = List<Vec2>::empty();
 		auto vertices = List<Vec2>::empty();
 		auto boundary = List<i32>::empty();
 		auto triangleVertices = List<i32>::empty();
@@ -197,8 +198,9 @@ void MainLoop::switchFromEditorToSimulation() {
 				b2Hull hull;
 				for (i64 j = 0; j < 3; j++) {
 					const auto index = triangulation[i + j];
-					//hull.points[j] = fromVec2(polygonToTriangulate[0][index]);
-					hull.points[j] = fromVec2(getTriangulationVertex(index));
+					const auto vertex = getTriangulationVertex(index);
+					simplifiedTriangleVertices.add(vertex);
+					hull.points[j] = fromVec2(vertex);
 				}
 				hull.count = 3;
 				const auto polygon = b2MakePolygon(&hull, 0.0f);
@@ -213,6 +215,7 @@ void MainLoop::switchFromEditorToSimulation() {
 		Simulation::ShapeInfo shapeInfo{
 			.type = shapeType,
 			.simplifiedOutline = std::move(simplifiedOutline),
+			.simplifiedTriangleVertices = std::move(simplifiedTriangleVertices),
 			.vertices = std::move(vertices),
 			.boundary = std::move(boundary),
 			.trianglesVertices = std::move(triangleVertices),
