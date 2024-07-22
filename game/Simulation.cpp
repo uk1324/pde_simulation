@@ -313,44 +313,45 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		Input::ignoreImGuiWantCapture = false;
 	}
 
-	b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
+	if (!simulationSettings.paused) {
+		b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
+		const auto simulationGridBounds = this->simulationGridBounds();
+		auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
+			return Vec2(x - 0.5f, y - 0.5f) * Constants::CELL_SIZE + simulationGridBounds.min;
+		};
+		auto transform = [](Vec2 v, Vec2 translation, Rotation rotation) {
+			return ((rotation * v) + translation) / Constants::CELL_SIZE;
+		};
 
-	const auto simulationGridBounds = this->simulationGridBounds();
-	auto calculateCellCenter = [&](i64 x, i64 y) -> Vec2 {
-		return Vec2(x - 0.5f, y - 0.5f) * Constants::CELL_SIZE + simulationGridBounds.min;
-	};
-	auto transform = [](Vec2 v, Vec2 translation, Rotation rotation) {
-		return ((rotation * v) + translation) / Constants::CELL_SIZE;
-	};
-
-	{
-		fill(cellType, CellType::EMPTY);
-		auto cellTypeView = view2d(cellType);
-		for (const auto& object : reflectingObjects) {
-			const auto rotation = b2Body_GetAngle(object.id);
-			const auto translation = toVec2(b2Body_GetPosition(object.id));
-			fillShape(cellTypeView, CellType::REFLECTING_WALL, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
-		}
-	}
-
-	{
-		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
-		fill(speedSquared, pow(defaultSpeed, 2.0f));
-		auto speedSquaredView = view2d(speedSquared);
-		for (const auto& object : transmissiveObjects) {
-			if (object.matchBackgroundSpeedOfTransmission) {
-				continue;
+		{
+			fill(cellType, CellType::EMPTY);
+			auto cellTypeView = view2d(cellType);
+			for (const auto& object : reflectingObjects) {
+				const auto rotation = b2Body_GetAngle(object.id);
+				const auto translation = toVec2(b2Body_GetPosition(object.id));
+				fillShape(cellTypeView, CellType::REFLECTING_WALL, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
 			}
-			const auto speedOfTransmitionSquared = pow(object.speedOfTransmition, 2.0f);
-			const auto rotation = b2Body_GetAngle(object.id);
-			const auto translation = toVec2(b2Body_GetPosition(object.id));
-			fillShape(speedSquaredView, speedOfTransmitionSquared, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
 		}
-	}
 
-	for (i64 i = 0; i < simulationSettings.waveEquationSimulationSubStepCount; i++) {
-		waveSimulationUpdate(simulationDt / simulationSettings.waveEquationSimulationSubStepCount);
+		{
+			const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
+			fill(speedSquared, pow(defaultSpeed, 2.0f));
+			auto speedSquaredView = view2d(speedSquared);
+			for (const auto& object : transmissiveObjects) {
+				if (object.matchBackgroundSpeedOfTransmission) {
+					continue;
+				}
+				const auto speedOfTransmitionSquared = pow(object.speedOfTransmition, 2.0f);
+				const auto rotation = b2Body_GetAngle(object.id);
+				const auto translation = toVec2(b2Body_GetPosition(object.id));
+				fillShape(speedSquaredView, speedOfTransmitionSquared, translation, rotation, object.shape, simulationGridBounds, simulationGridSize);
+			}
+		}
+
+		for (i64 i = 0; i < simulationSettings.waveEquationSimulationSubStepCount; i++) {
+			waveSimulationUpdate(simulationDt / simulationSettings.waveEquationSimulationSubStepCount);
+		}
 	}
 
 	render(renderer, grid3dScale);

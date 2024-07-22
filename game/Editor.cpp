@@ -1410,7 +1410,7 @@ void Editor::materialSettingGui() {
 bool Editor::transmissiveMaterialGui(EditorMaterialTransimisive& material) {
 	bool modified = false;
 
-	modified |= Gui::checkbox("match background speed of transmission", material.matchBackgroundSpeedOfTransmission);
+	modified |= Gui::checkbox("neutral", material.matchBackgroundSpeedOfTransmission);
 	if (!material.matchBackgroundSpeedOfTransmission) {
 		Gui::inputFloat("speed of transmission", material.speedOfTransmition);
 		modified |= ImGui::IsItemDeactivatedAfterEdit();

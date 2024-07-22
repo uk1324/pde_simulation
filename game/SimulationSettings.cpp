@@ -65,6 +65,8 @@ void simulationSettingsGui(SimulationSettings& settings) {
 		Gui::inputI32("rigidbody simulation substeps", settings.rigidbodySimulationSubStepCount);
 		settings.rigidbodySimulationSubStepCount = std::clamp(settings.rigidbodySimulationSubStepCount, 1, 20);
 
+		Gui::checkbox("paused", settings.paused);
+
 		// TODO: undo redo
 		Gui::sliderFloat("time scale", settings.timeScale, 0.0f, 1.0f);
 		settings.timeScale = std::clamp(settings.timeScale, 0.0f, 1.0f);
