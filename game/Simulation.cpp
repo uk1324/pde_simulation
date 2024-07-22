@@ -105,6 +105,7 @@ Aabb transformedTriangleAabb(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 position, Rotation 
 	return Aabb::fromPoints(constView(points));
 }
 
+#include <immintrin.h>
 
 template<typename T>
 void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec2 translation, T value, Aabb gridBounds, Vec2T<i64> gridSize) {
@@ -115,6 +116,16 @@ void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec
 	const auto a1 = v2 - v1;
 	const auto a2 = v0 - v2;
 
+	const f32 asXsData[]{ a0.x, a1.x, a2.x, 1.0f };
+	const auto asXs = _mm_load_ps(asXsData);
+	const f32 asYsData[]{ a0.y, a1.y, a2.y, 0.0f };
+	const auto asYs = _mm_load_ps(asYsData);
+
+	const f32 vsXsData[]{ v0.x, v1.x, v2.x, 0.0f };
+	const auto vsXs = _mm_load_ps(vsXsData);
+	const f32 vsYsData[]{ v0.y, v1.y, v2.y, 0.0f };
+	const auto vsYs = _mm_load_ps(vsYsData);
+
 	const auto rotationInversed = rotation.inversed();
 	for (i64 yi = gridAabb.min.y; yi <= gridAabb.max.y; yi++) {
 		for (i64 xi = gridAabb.min.x; xi <= gridAabb.max.x; xi++) {
@@ -122,13 +133,6 @@ void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec
 			cellCenter -= translation;
 			cellCenter *= rotationInversed;
 
-			const auto b0 = cellCenter - v0;
-			const auto b1 = cellCenter - v1;
-			const auto b2 = cellCenter - v2;
-
-			auto area0 = a0.x * b0.y - b0.x * a0.y;
-			auto area1 = a1.x * b1.y - b1.x * a1.y;
-			auto area2 = a2.x * b2.y - b2.x * a2.y;
 
 			/*auto area0 = det(a0, b0);
 			auto area1 = det(a1, b1);
@@ -138,9 +142,73 @@ void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec
 			auto area1 = det(diff1, cellCenter - v1);
 			auto area2 = det(diff2, cellCenter - v2);*/
 
-			if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
+			//const auto b0 = cellCenter - v0;
+			//auto area0 = a0.x * b0.y - b0.x * a0.y;
+			//if (area0 <= 0.0f) {
+			//	continue;
+			//}
+			//const auto b1 = cellCenter - v1;
+			//auto area1 = a1.x * b1.y - b1.x * a1.y;
+			//if (area1 <= 0.0f) {
+			//	continue;
+			//}
+			//const auto b2 = cellCenter - v2;
+			//auto area2 = a2.x * b2.y - b2.x * a2.y;
+			//if (area2 <= 0.0f) {
+			//	continue;
+			//}
+			//a(xi, yi) = value;
+
+
+			//const auto b0 = cellCenter - v0;
+			//const auto b1 = cellCenter - v1;
+			//const auto b2 = cellCenter - v2;
+
+			//auto area0 = a0.x * b0.y - b0.x * a0.y;
+			//auto area1 = a1.x * b1.y - b1.x * a1.y;
+			//auto area2 = a2.x * b2.y - b2.x * a2.y;
+
+			//if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
+			//	a(xi, yi) = value;
+			//}
+
+			//const auto b0 = cellCenter - v0;
+			//const auto b1 = cellCenter - v1;
+			//const auto b2 = cellCenter - v2;
+
+			//auto area0 = a0.x * b0.y - b0.x * a0.y;
+			//auto area1 = a1.x * b1.y - b1.x * a1.y;
+			//auto area2 = a2.x * b2.y - b2.x * a2.y;
+
+			//if ((area0 > 0.0f) & (area1 > 0.0f) & (area2 > 0.0f)) {
+			//	a(xi, yi) = value;
+			//}
+
+			f32 cXsData[] { cellCenter.x, cellCenter.x, cellCenter.x, 1.0f };
+			f32 cYsData[] { cellCenter.y, cellCenter.y, cellCenter.y, 1.0f };
+
+			const auto cXs = _mm_load_ps(cXsData);
+			const auto cYs = _mm_load_ps(cYsData);
+			const auto bsXs = _mm_sub_ps(cXs, vsXs);
+			const auto bsYs = _mm_sub_ps(cYs, vsYs);
+
+			const auto areas = _mm_sub_ps(_mm_mul_ps(asXs, bsYs), _mm_mul_ps(bsXs, asYs));
+
+			f32 result[4];
+			_mm_store_ps(result, areas);
+			if (result[0] > 0.0f && result[1] > 0.0f && result[2] > 0.0f) {
 				a(xi, yi) = value;
 			}
+
+			/*f32 zerosData[]{ 0.0f, 0.0f, 0.0f, 0.0f };
+			const auto zeros = _mm_load_ps(zerosData);
+			const auto biggerThanZero = _mm_castps_si128(_mm_cmp_ps(areas, zeros, _CMP_GT_OQ));
+			if (_mm_test_all_ones(biggerThanZero)) {
+				a(xi, yi) = value;
+			}*/
+
+			/*if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
+			}*/
 		}
 	}
 
