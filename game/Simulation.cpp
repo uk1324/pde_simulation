@@ -1,5 +1,6 @@
 #include <game/Simulation.hpp>
 #include <game/View2dUtils.hpp>
+#include <Timer.hpp>
 #include <Gui.hpp>
 #include <engine/Math/Constants.hpp>
 #include <game/RelativePositions.hpp>
@@ -80,33 +81,94 @@ void fillTopFlatTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
 	}
 }
 
+
+
+bool triangleContains(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 p) {
+	auto area0 = det(v1 - v0, p - v0);
+	auto area1 = det(v2 - v1, p - v1);
+	auto area2 = det(v0 - v2, p - v2);
+	//auto sign = [](float value) -> float { 
+	//	// "<=" So points on the triangle are also return true.
+	//	return value <= 0.0f ? -1.0f : 1.0f; 
+	//};
+	//return sign(area0) == sign(area1) && sign(area1) == sign(area2);
+	/*return area0 < 0.0f && area1 < 0.0f && area2 < 0.0f;*/
+	return area0 > 0.0f && area1 > 0.0f && area2 > 0.0f;
+}
+
+Aabb transformedTriangleAabb(Vec2 v0, Vec2 v1, Vec2 v2, Vec2 position, Rotation rotation) {
+	Vec2 points[]{ 
+		rotation * v0 + position, 
+		rotation * v1 + position, 
+		rotation * v2 + position 
+	};
+	return Aabb::fromPoints(constView(points));
+}
+
+
 template<typename T>
-void fillTriangle(View2d<T> a, Vec2 v1, Vec2 v2, Vec2 v3, T value) {
-	if (v1.y > v2.y) {
-		std::swap(v1, v2);
-	}
-	if (v2.y > v3.y) {
-		std::swap(v2, v3);
-	} 
-	if (v1.y > v2.y) {
-		std::swap(v1, v2);
-	}
-	/* at first sort the three vertices by y-coordinate ascending so v1 is the topmost vertice */
+void fillTriangle(View2d<T> a, Vec2 v0, Vec2 v1, Vec2 v2, Rotation rotation, Vec2 translation, T value, Aabb gridBounds, Vec2T<i64> gridSize) {
+	const auto aabb = transformedTriangleAabb(v0, v1, v2, translation, rotation);
+	const auto gridAabb = aabbToClampedGridAabb(aabb, gridBounds, gridSize);
 
-	//sortVerticesAscendingByY();
+	const auto a0 = v1 - v0;
+	const auto a1 = v2 - v1;
+	const auto a2 = v0 - v2;
 
-	/* here we know that v1.y <= v2.y <= v3.y */
-	if (v2.y == v3.y) {
-		fillBottomFlatTriangle(a, v1, v2, v3, value);
-	} else if (v1.y == v2.y) {
-		fillTopFlatTriangle(a, v1, v2, v3, value);
-	} else {
-		/* general case - split the triangle in a topflat and bottom-flat one */
-		const auto v4 = Vec2(
-			(int)(v1.x + ((float)(v2.y - v1.y) / (float)(v3.y - v1.y)) * (v3.x - v1.x)), v2.y);
-		fillBottomFlatTriangle(a, v1, v2, v4, value);
-		fillTopFlatTriangle(a, v2, v4, v3, value);
+	const auto rotationInversed = rotation.inversed();
+	for (i64 yi = gridAabb.min.y; yi <= gridAabb.max.y; yi++) {
+		for (i64 xi = gridAabb.min.x; xi <= gridAabb.max.x; xi++) {
+			auto cellCenter = Vec2(xi - 0.5f, yi - 0.5f) * Constants::CELL_SIZE + gridBounds.min;
+			cellCenter -= translation;
+			cellCenter *= rotationInversed;
+
+			const auto b0 = cellCenter - v0;
+			const auto b1 = cellCenter - v1;
+			const auto b2 = cellCenter - v2;
+
+			auto area0 = a0.x * b0.y - b0.x * a0.y;
+			auto area1 = a1.x * b1.y - b1.x * a1.y;
+			auto area2 = a2.x * b2.y - b2.x * a2.y;
+
+			/*auto area0 = det(a0, b0);
+			auto area1 = det(a1, b1);
+			auto area2 = det(a2, b2);*/
+
+			/*auto area0 = det(diff0, cellCenter - v0);
+			auto area1 = det(diff1, cellCenter - v1);
+			auto area2 = det(diff2, cellCenter - v2);*/
+
+			if (area0 > 0.0f && area1 > 0.0f && area2 > 0.0f) {
+				a(xi, yi) = value;
+			}
+		}
 	}
+
+	//if (v1.y > v2.y) {
+	//	std::swap(v1, v2);
+	//}
+	//if (v2.y > v3.y) {
+	//	std::swap(v2, v3);
+	//} 
+	//if (v1.y > v2.y) {
+	//	std::swap(v1, v2);
+	//}
+	///* at first sort the three vertices by y-coordinate ascending so v1 is the topmost vertice */
+
+	////sortVerticesAscendingByY();
+
+	///* here we know that v1.y <= v2.y <= v3.y */
+	//if (v2.y == v3.y) {
+	//	fillBottomFlatTriangle(a, v1, v2, v3, value);
+	//} else if (v1.y == v2.y) {
+	//	fillTopFlatTriangle(a, v1, v2, v3, value);
+	//} else {
+	//	/* general case - split the triangle in a topflat and bottom-flat one */
+	//	const auto v4 = Vec2(
+	//		(int)(v1.x + ((float)(v2.y - v1.y) / (float)(v3.y - v1.y)) * (v3.x - v1.x)), v2.y);
+	//	fillBottomFlatTriangle(a, v1, v2, v4, value);
+	//	fillTopFlatTriangle(a, v2, v4, v3, value);
+	//}
 }
 
 bool isPointInSimulationPolygon(View<const Vec2> verts, Vec2 p) {
@@ -390,20 +452,26 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		return ((rotation * v) + translation) / Constants::CELL_SIZE;
 	};
 
+	Timer timer;
 	const auto cellTypeView = view2d(cellType);
 	for (const auto& object : reflectingObjects) {
 		const Rotation rotation(b2Body_GetAngle(object.id));
 		const auto translation = toVec2(b2Body_GetPosition(object.id));
 		if (object.shape.type == ShapeType::POLYGON) {
 			for (i32 i = 0; i < object.shape.simplifiedTriangleVertices.size(); i += 3) {
-				const auto v0 = transform(object.shape.simplifiedTriangleVertices[i], translation, rotation);
+				const auto v0 = object.shape.simplifiedTriangleVertices[i];
+				const auto v1 = object.shape.simplifiedTriangleVertices[i + 1];
+				const auto v2 = object.shape.simplifiedTriangleVertices[i + 2];
+				fillTriangle(cellTypeView, v0, v1, v2, rotation, translation, CellType::REFLECTING_WALL, simulationGridBounds, simulationGridSize);
+			/*	const auto v0 = transform(object.shape.simplifiedTriangleVertices[i], translation, rotation);
 				const auto v1 = transform(object.shape.simplifiedTriangleVertices[i + 1], translation, rotation);
-				const auto v2 = transform(object.shape.simplifiedTriangleVertices[i + 2], translation, rotation);
-				fillTriangle(cellTypeView, v0, v1, v2, CellType::REFLECTING_WALL);
+				const auto v2 = transform(object.shape.simplifiedTriangleVertices[i + 2], translation, rotation);*/
+				//fillTriangle(cellTypeView, v0, v1, v2, CellType::REFLECTING_WALL);
 			}
 		}
 		//FILL_SHAPE(cellType(xi, yi) = CellType::REFLECTING_WALL;)
 	}
+	timer.guiTookMiliseconds("triangle render");
 	{
 		const auto defaultSpeed = 30.0f * Constants::CELL_SIZE;
 		fill(speedSquared, pow(defaultSpeed, 2.0f));
