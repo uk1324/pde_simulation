@@ -1,0 +1,96 @@
+`
+#include <variant>
+#include <game/InputButton.hpp>
+`
+
+struct [[Json]] LevelShapeCircle {
+	float radius;
+}
+
+`
+struct LevelShapePolygon {
+	std::vector<std::vector<Vec2>> boundary;
+};
+
+template<>
+LevelShapePolygon fromJson<LevelShapePolygon>(const Json::Value& json);
+Json::Value toJson(const LevelShapePolygon& value);
+`
+
+`
+using LevelShape = std::variant<LevelShapeCircle, LevelShapePolygon>;
+
+template<>
+LevelShape fromJson<LevelShape>(const Json::Value& json);
+Json::Value toJson(const LevelShape& value);
+`
+
+struct [[Json]] LevelMaterialTransimissive {
+	bool matchBackgroundSpeedOfTransmission;
+	float speedOfTransmition;
+}
+
+struct [[Json]] LevelMaterialReflective {
+
+}
+
+`
+using LevelMaterial = std::variant<LevelMaterialReflective, LevelMaterialTransimissive>;
+
+template<>
+LevelMaterial fromJson<LevelMaterial>(const Json::Value& json);
+Json::Value toJson(const LevelMaterial& value);
+`
+
+
+`
+struct LevelBitfield {
+	u32 value;
+};
+
+template<>
+LevelBitfield fromJson<LevelBitfield>(const Json::Value& json);
+Json::Value toJson(const LevelBitfield& value);
+`
+
+struct [[Json]] LevelRigidBody {
+	float rotation;
+	Vec2 translation;
+
+	LevelShape shape;
+	LevelMaterial material;
+	
+	bool isStatic;
+	LevelBitfield collisionCategories;
+	LevelBitfield collisionMask;
+}
+
+`
+template<>
+InputButton fromJson<InputButton>(const Json::Value& json);
+Json::Value toJson(const InputButton& value);
+`
+
+struct [[Json]] LevelEmitter {
+	optional<i32> rigidBody;
+	Vec2 position;
+
+	float strength;
+	bool oscillate;
+	float period;
+	float phaseOffset;
+
+	optional<InputButton> activateOn;
+}
+
+struct [[Json]] LevelRevoluteJoint {
+	optional<i32> body0;
+	Vec2 position0;
+	i32 body1;
+	Vec2 position1;
+	float motorSpeed;
+	float motorMaxTorque;
+	bool motorAlwaysEnabled;
+	optional<InputButton> clockwiseKey;
+	optional<InputButton> counterclockwiseKey;
+}

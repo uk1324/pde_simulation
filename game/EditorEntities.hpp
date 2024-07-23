@@ -25,6 +25,9 @@ struct EditorPolygonShape {
 	void initializeFromSimplePolygon(View<const Vec2> inputVertices);
 	void cloneFrom(const EditorPolygonShape& other);
 
+	// Could store the boundary directly, because the triangulation doesn't add any new vertices.
+	// The index list is just repeating the vertex list.
+	// Technically without it there would need to be some other separator of the paths. Which could cause issues with serialization.
 	List<Vec2> vertices;
 	List<i32> trianglesVertices;
 

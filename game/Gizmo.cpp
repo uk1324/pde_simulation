@@ -80,6 +80,10 @@ Gizmo::Arrows Gizmo::getArrows(const Camera& camera) const {
 	return Arrows{ .xArrow = Vec2::fromPolar(angle, length), .yArrow = Vec2::fromPolar(angle + PI<f32> / 2.0f, length) };
 }
 
+void Gizmo::reset() {
+	grabbedPart = Part::NONE;
+}
+
 f32 Gizmo::arrowLength(const Camera& camera) const {
 	return 0.2f / camera.zoom;
 }

@@ -12,8 +12,6 @@
 #include <engine/Math/Rotation.hpp>
 #include <engine/Math/Color.hpp>
 
-#pragma optimize( "", off )
-
 GameRenderer GameRenderer::make() {
 	auto gfx = Gfx2d::make();
 	auto waveVao = createInstancingVao<WaveShader>(gfx.quad2dPtVbo, gfx.quad2dPtIbo, gfx.instancesVbo);
@@ -130,5 +128,3 @@ void GameRenderer::drawGrid() {
 	};
 	drawInstances(gridVao, gfx.instancesVbo, constView(instance), quad2dPtDrawInstances);
 }
-
-#pragma optimize( "", on )

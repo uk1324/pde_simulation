@@ -1,5 +1,8 @@
 #include "Editor.hpp"
 #include <game/Editor.hpp>
+#include <Overloaded.hpp>
+#include <JsonFileIo.hpp>
+#include <game/FileSelectWidget.hpp>
 #include <engine/Math/Constants.hpp>
 #include <engine/Input/InputUtils.hpp>
 #include <game/ShapeVertices.hpp>
@@ -16,6 +19,8 @@
 #include <Gui.hpp>
 #include <dependencies/earcut/earcut.hpp>
 #include <glad/glad.h>
+#include <Json/JsonPrinter.hpp>
+#include <fstream>
 
 const auto ELLIPSE_SAMPLE_POINTS = 70;
 const auto PARABOLA_SAMPLE_POINTS = 70;
@@ -46,6 +51,10 @@ Editor::Result Editor::update(GameRenderer& renderer, const GameInput& originalI
 	emitters.update();
 	revoluteJoints.update();
 	polygonShapes.update();
+
+	if (Input::isKeyDown(KeyCode::H)) {
+		saveLevel();
+	}
 
 	auto input = originalInput;
 	if (isCursorSnappingEnabled(originalInput)) {
@@ -442,40 +451,57 @@ void Editor::selectToolUpdate(const GameInput& input) {
 }
 
 Editor::Result Editor::gui() {
-	//auto id = ImGui::DockSpaceOverViewport(
-	//	ImGui::GetMainViewport(), 
-	//	ImGuiDockNodeFlags_NoDockingOverCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
+	bool saveButtonDown = false;
+	bool saveAsButtonDown = false;
+	bool openButtonDown = false;
 
-	//const auto editorSettingsWindowName = "editor";
-	//const auto simulationSettingsWindowName = "simulation";
-	//if (firstFrame) {
-	//	ImGui::DockBuilderRemoveNode(id);
-	//	ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
+	if (ImGui::BeginMainMenuBar()) {
+		if (ImGui::BeginMenu("level")) {
+			if (ImGui::MenuItem("save as")) {
+				saveAsButtonDown = true;
+			}
+			if (ImGui::MenuItem("save")) {
+				saveButtonDown = true;
+			} 
+			if (ImGui::MenuItem("open")) {
+				openButtonDown = true;
+			}
+			ImGui::EndMenu();
+		}
+		
+		ImGui::EndMainMenuBar();
+	}
 
-	//	//const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-	//	const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-	//	ImGui::DockBuilderSetNodeSize(leftId, ImVec2(0.2f * ImGui::GetIO().DisplaySize.x, 1.0f));
+	auto save = [&](const char* path) {
+		const auto level = saveLevel();
+		if (level.has_value()) {
+			std::ofstream file(path);
+			Json::print(file, *level);
+			lastLoadedLevelPath = path;
+		} else {
+			openSaveLevelErrorModal();
+		}
+	};
 
-	//	ImGui::DockBuilderDockWindow(simulationSettingsWindowName, leftId);
-	//	ImGui::DockBuilderDockWindow(editorSettingsWindowName, leftId);
+	if (saveAsButtonDown || (saveButtonDown && !lastLoadedLevelPath.has_value())) {
+		const auto path = Gui::openFileSave();
+		if (path.has_value()) {
+			save(path->data());
+		}
+	} else if (saveButtonDown && lastLoadedLevelPath.has_value()) {
+		save(lastLoadedLevelPath->data());
+	}
 
-	//	ImGui::DockBuilderFinish(id);
+	if (openButtonDown) {
+		const auto path = Gui::openFileSelect();
+		if (path.has_value()) {
+			const auto result = tryLoadLevel(path->data());
+			if (!result) {
+				openOpenLevelErrorModal();
+			}
+		}
+	}
 
-	//	ImGui::SetWindowFocus(editorSettingsWindowName);
-
-	//	firstFrame = false;
-	//}
-
-	//if (ImGui::BeginMainMenuBar()) {
-	//	if (ImGui::BeginMenu("cursor snap")) {
-	//		/*if (ImGui::MenuItem("new")) {
-
-	//		}*/
-	//		ImGui::EndMenu();
-	//	}
-	//	
-	//	ImGui::EndMainMenuBar();
-	//}
 
 	ImGui::Begin(editorSimulationSettingsWindowName);
 	simulationSettingsGui(simulationSettings);
@@ -606,6 +632,8 @@ Editor::Result Editor::gui() {
 	ImGui::End();
 
 	polygonTool.invalidShapeModalGui();
+	saveLevelErrorModal();
+	openLevelErrorModal();
 
 	return Result{
 		.switchToSimulation = switchToSimulation
@@ -1881,8 +1909,6 @@ void Editor::createObject(EditorShape&& shape) {
  	auto body = createRigidBody(shape, materialSetting(), isStaticSetting, rigidBodyCollisionCategoriesSetting, rigidBodyCollisionMaskSetting);
 }
 
-bool Editor::firstFrame = true;
-
 std::optional<EditorCircleShape> Editor::CircleTool::update(Vec2 cursorPos, bool cursorLeftDown, bool cursorRightDown) {
 	if (cursorRightDown) {
 		center = std::nullopt;
@@ -2361,4 +2387,328 @@ void Editor::RevoluteJointTool::render(GameRenderer& renderer, Vec2 cursorPos) {
 	if (showPreview) {
 		renderer.revoluteJoint(cursorPos, true);
 	}
+}
+
+static LevelMaterial levelMaterial(const EditorMaterial& material) {
+	switch (material.type) {
+		using enum EditorMaterialType;
+	case RELFECTING:
+		return LevelMaterialReflective{};
+	case TRANSIMISIVE:
+		return LevelMaterialTransimissive{
+			.matchBackgroundSpeedOfTransmission = material.transimisive.matchBackgroundSpeedOfTransmission,
+			.speedOfTransmition = material.transimisive.speedOfTransmition
+		};
+	}
+	ASSERT_NOT_REACHED();
+}
+
+LevelShape Editor::levelShape(const EditorShape& shape) {
+	switch (shape.type) {
+		using enum EditorShapeType;
+	case CIRCLE:
+		return LevelShapeCircle{ .radius = shape.circle.radius };
+
+	case POLYGON: {
+		const auto& polygon = polygonShapes.get(shape.polygon);
+		if (!polygon.has_value()) {
+			ASSERT_NOT_REACHED();
+		}
+		LevelShapePolygon levelPolygon;
+		std::vector<Vec2> path;
+		for (const auto vertexIndex : polygon->boundary) {
+			if (vertexIndex == EditorPolygonShape::PATH_END_INDEX) {
+				levelPolygon.boundary.push_back(path);
+				path.clear();
+			} else {
+				path.push_back(polygon->vertices[vertexIndex]);
+			}
+		}
+		return levelPolygon;
+	}
+
+	}
+	ASSERT_NOT_REACHED();
+}
+
+
+const auto rigidBodiesFieldName = "rigidBodies";
+const auto emittersFieldName = "emitters";
+const auto revoluteJointsFieldName = "revoluteJoints";
+
+std::optional<Json::Value> Editor::saveLevel() {
+	auto level = Json::Value::emptyObject();
+	std::unordered_map<EditorRigidBodyId, i32> rigidBodyIdToIndex;
+	{
+		auto& levelRigidBodies = (level[rigidBodiesFieldName] = Json::Value::emptyArray()).array();
+		for (const auto body : rigidBodies) {
+			const auto transform = getShapeTransform(body->shape);
+			const auto index = levelRigidBodies.size();
+			levelRigidBodies.push_back(toJson(LevelRigidBody{
+				.rotation = transform.rotation,
+				.translation = transform.translation,
+				.shape = levelShape(body->shape),
+				.material = levelMaterial(body->material),
+				.isStatic = body->isStatic,
+				.collisionCategories = LevelBitfield{ .value = body->collisionCategories },
+				.collisionMask = LevelBitfield{ .value = body->collisionMask },
+			}));
+			rigidBodyIdToIndex.insert({ body.id, index });
+		}
+	}
+
+	{
+		auto& levelEmitters = (level[emittersFieldName] = Json::Value::emptyArray()).array();
+		for (const auto emitter : emitters) {
+			std::optional<i32> rigidBodyIndex;
+			if (emitter->rigidBody.has_value()) {
+				const auto rigidBody = rigidBodyIdToIndex.find(*emitter->rigidBody);
+				if (rigidBody == rigidBodyIdToIndex.end()) {
+					continue;
+				}
+				rigidBodyIndex = rigidBody->second;
+			}
+
+			levelEmitters.push_back(toJson(LevelEmitter{
+				.rigidBody = rigidBodyIndex,
+				.position = emitter->position,
+				.strength = emitter->strength,
+				.oscillate = emitter->oscillate,
+				.period = emitter->period,
+				.phaseOffset = emitter->phaseOffset,
+				.activateOn = emitter->activateOn
+			}));
+		}
+	}
+
+	{
+		auto& levelRevoluteJoints = (level[revoluteJointsFieldName] = Json::Value::emptyArray()).array();
+		for (const auto joint : revoluteJoints) {
+			std::optional<i32> body0Index;
+			if (joint->body0.has_value()) {
+				const auto rigidBody = rigidBodyIdToIndex.find(*joint->body0);
+				if (rigidBody == rigidBodyIdToIndex.end()) {
+					continue;
+				}
+				body0Index = rigidBody->second;
+			}
+			i32 body1Index;
+			{
+				const auto rigidBody = rigidBodyIdToIndex.find(joint->body1);
+				if (rigidBody == rigidBodyIdToIndex.end()) {
+					continue;
+				}
+				body1Index = rigidBody->second;
+			}
+
+			levelRevoluteJoints.push_back(toJson(LevelRevoluteJoint{
+				.body0 = body0Index,
+				.position0 = joint->position0,
+				.body1 = body1Index,
+				.position1 = joint->position1,
+				.motorSpeed = joint->motorSpeed,
+				.motorMaxTorque = joint->motorMaxTorque,
+				.motorAlwaysEnabled = joint->motorAlwaysEnabled,
+				.clockwiseKey = joint->clockwiseKey,
+				.counterclockwiseKey = joint->counterclockwiseKey,
+			}));
+		}
+	}
+
+	return level;
+}
+
+
+const auto SAVE_LEVEL_ERROR_MODAL = "save level error";
+void Editor::openSaveLevelErrorModal() {
+	ImGui::OpenPopup(SAVE_LEVEL_ERROR_MODAL);
+}
+
+void Editor::saveLevelErrorModal(){
+	const auto center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(SAVE_LEVEL_ERROR_MODAL, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		return;
+	}
+	ImGui::Text("Failed to save level.");
+
+	if (ImGui::Button("ok")) {
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
+}
+
+const auto OPEN_LEVEL_ERROR_MODAL = "open level error";
+
+void Editor::openOpenLevelErrorModal() {
+	ImGui::OpenPopup(OPEN_LEVEL_ERROR_MODAL);
+}
+
+void Editor::openLevelErrorModal() {
+	const auto center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(OPEN_LEVEL_ERROR_MODAL, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		return;
+	}
+	ImGui::Text("Failed to open level.");
+
+	if (ImGui::Button("ok")) {
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
+}
+
+std::optional<EditorMaterial> Editor::materialFromLevel(const LevelMaterial& material) {
+	return std::visit(overloaded{
+		[](const LevelMaterialReflective& material) -> std::optional<EditorMaterial> {
+			return EditorMaterial::makeReflecting();
+		},
+		[](const LevelMaterialTransimissive& material) -> std::optional<EditorMaterial> {
+			if (material.speedOfTransmition < 0.0f) {
+				return std::nullopt;
+			}
+			return EditorMaterial(EditorMaterialTransimisive{
+				.matchBackgroundSpeedOfTransmission = material.matchBackgroundSpeedOfTransmission,
+				.speedOfTransmition = material.speedOfTransmition
+			});
+		},
+	}, material);
+}
+
+std::optional<EditorShape> Editor::shapeFromLevel(const LevelShape& shape, Vec2 translation, f32 rotation) {
+	return std::visit(overloaded{
+		[&](const LevelShapeCircle& circle) -> std::optional<EditorShape> {
+			if (circle.radius < 0.0f) {
+				return std::nullopt;
+			}
+			return EditorShape(EditorCircleShape(translation, circle.radius, rotation));
+		},
+		[&](const LevelShapePolygon& polygon) -> std::optional<EditorShape> {
+			auto polygonEntity = createPolygonShape();
+			i64 i = 0;
+			for (const auto& path : polygon.boundary) {
+				for (const auto& vertex : path) {
+					polygonEntity->boundary.add(i);
+					polygonEntity->vertices.add(vertex);
+					i++;
+				}
+				polygonEntity->boundary.add(EditorPolygonShape::PATH_END_INDEX);
+			}
+			const auto triangulation = mapbox::earcut(polygon.boundary);
+			for (const auto& index : triangulation) {
+				polygonEntity->trianglesVertices.add(index);
+			}
+			return EditorShape(polygonEntity.id);
+		},
+	}, shape);
+}
+
+bool Editor::tryLoadLevel(const char* path) {
+	const auto json = tryLoadJsonFromFile(path);
+	if (!json.has_value()) {
+		return false;
+	}
+	try {
+		selectedEntities.clear();
+		gizmoSelectedShapesAtGrabStart.clear();
+		gizmo.reset();
+		polygonShapes.reset();
+		rigidBodies.reset();
+		emitters.reset();
+		revoluteJoints.reset();
+
+		std::unordered_map<i32, EditorRigidBodyId> rigidBodyIndexToId;
+		{
+			auto& rigidBodiesJson = json->at(rigidBodiesFieldName).array();
+			for (i64 index = 0; index < rigidBodiesJson.size(); index++) {
+				const auto& bodyJson = rigidBodiesJson[index];
+				const auto bodyLevel = fromJson<LevelRigidBody>(bodyJson);
+
+				auto shape = shapeFromLevel(bodyLevel.shape, bodyLevel.translation, bodyLevel.rotation);
+				if (!shape.has_value()) {
+					goto failedToLoadLevel;
+				}
+				auto material = materialFromLevel(bodyLevel.material);
+				if (!material.has_value()) {
+					goto failedToLoadLevel;
+				}
+
+				// TODO: Verify the bitfields.
+				const auto body = createRigidBody(std::move(*shape), std::move(*material), bodyLevel.isStatic, bodyLevel.collisionCategories.value, bodyLevel.collisionMask.value);
+				rigidBodyIndexToId.insert({ index, body.id });
+			}
+		}
+
+		{
+			auto& emittersJson = json->at(emittersFieldName).array();
+			for (const auto& emitterJson : emittersJson) {
+				const auto emitterLevel = fromJson<LevelEmitter>(emitterJson);
+
+				std::optional<EditorRigidBodyId> rigidBody;
+				if (emitterLevel.rigidBody.has_value()) {
+					const auto id = rigidBodyIndexToId.find(*emitterLevel.rigidBody);
+					if (id == rigidBodyIndexToId.end()) {
+						goto failedToLoadLevel;
+					}
+					rigidBody = id->second;
+				}
+
+				auto emitter = emitters.create();
+				emitter->initialize(
+					rigidBody,
+					emitterLevel.position,
+					emitterLevel.strength,
+					emitterLevel.oscillate,
+					emitterLevel.period,
+					emitterLevel.phaseOffset,
+					emitterLevel.activateOn
+				);
+			}
+		}
+
+		{
+			auto& revoluteJointsJson = json->at(revoluteJointsFieldName).array();
+			for (const auto& jointJson : revoluteJointsJson) {
+				const auto jointLevel = fromJson<LevelRevoluteJoint>(jointJson);
+
+				std::optional<EditorRigidBodyId> body0;
+				if (jointLevel.body0.has_value()) {
+					const auto id = rigidBodyIndexToId.find(*jointLevel.body0);
+					if (id == rigidBodyIndexToId.end()) {
+						goto failedToLoadLevel;
+					}
+					body0 = id->second;
+				}
+
+				const auto body1Id = rigidBodyIndexToId.find(*jointLevel.body0);
+				if (body1Id == rigidBodyIndexToId.end()) {
+					goto failedToLoadLevel;
+				}
+				const auto body1 = body1Id->second;
+				auto joint = revoluteJoints.create();
+				joint->intialize(
+					body0,
+					jointLevel.position0,
+					body1,
+					jointLevel.position1,
+					jointLevel.motorSpeed,
+					jointLevel.motorMaxTorque,
+					jointLevel.motorAlwaysEnabled,
+					jointLevel.clockwiseKey,
+					jointLevel.counterclockwiseKey
+				);
+			}
+		}
+	} catch (const Json::Value::Exception&) {
+		goto failedToLoadLevel;
+	}
+
+	lastLoadedLevelPath = path;
+	return true;
+
+	failedToLoadLevel:
+	lastLoadedLevelPath = std::nullopt;
+	return false;
 }

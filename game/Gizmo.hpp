@@ -32,6 +32,8 @@ struct Gizmo {
 	Vec2 cursorPositionAtGrabStart = Vec2(0.0f);
 	Part grabbedPart = Part::NONE;
 
+	void reset();
+
 	f32 arrowLength(const Camera& camera) const;
 	f32 arrowWidth(const Camera& camera) const;
 

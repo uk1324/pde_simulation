@@ -1,6 +1,7 @@
 #pragma once
 
 #include <engine/Math/Aabb.hpp>
+#include <Json/JsonValue.hpp>
 #include <variant>
 #include <game/SimulationSettings.hpp>
 #include <game/EditorActions.hpp>
@@ -11,6 +12,7 @@
 #include <game/Gizmo.hpp>
 #include <game/Shared.hpp>
 #include <clipper2/clipper.h>
+#include <game/Serialization/LevelData.hpp>
 
 struct Editor {
 	struct Result {
@@ -45,8 +47,6 @@ struct Editor {
 	bool shapeGui(EditorShape& shape);
 
 	void render(GameRenderer& renderer, const GameInput& input);
-
-	static bool firstFrame;
 
 	void createObject(EditorShape&& shape);
 
@@ -284,5 +284,20 @@ struct Editor {
 	EntityArrayPair<EditorRigidBody> createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
 	EntityArray<EditorEmitter, EditorEmitter::DefaultInitialize> emitters;
 	EntityArray<EditorRevoluteJoint, EditorRevoluteJoint::DefaultInitialize> revoluteJoints;
+
+	LevelShape levelShape(const EditorShape& shape);
+	std::optional<Json::Value> saveLevel();
+
+	std::optional<std::string> lastLoadedLevelPath;
+	void openSaveLevelErrorModal();
+	void saveLevelErrorModal();
+
+
+	void openOpenLevelErrorModal();
+	void openLevelErrorModal();
+
+	std::optional<EditorMaterial> materialFromLevel(const LevelMaterial& material);
+	std::optional<EditorShape> shapeFromLevel(const LevelShape& shape, Vec2 translation, f32 rotation);
+	bool tryLoadLevel(const char* path);
 };
 
