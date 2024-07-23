@@ -35,7 +35,7 @@ struct Simulation {
 	bool gui();
 
 	void waveSimulationUpdate(f32 simulationDt);
-	void render(GameRenderer& renderer, Vec3 grid3dScale);
+	void render(GameRenderer& renderer, Vec3 grid3dScale, bool hideGui);
 
 	void runEmitter(Vec2 pos, f32 strength, bool oscillate, f32 period, f32 phaseOffset);
 
@@ -53,6 +53,7 @@ struct Simulation {
 	b2WorldId world;
 
 	b2BodyId boundariesBodyId;
+	b2BodyId backgroundBodyId;
 
 	bool debugDisplay = false;
 

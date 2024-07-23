@@ -457,6 +457,10 @@ Editor::Result Editor::gui() {
 
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("level")) {
+			if (ImGui::MenuItem("new")) {
+				reset();
+			}
+
 			if (ImGui::MenuItem("save as")) {
 				saveAsButtonDown = true;
 			}
@@ -1209,10 +1213,9 @@ Vec2 Editor::selectedEntitiesCenter() {
 bool Editor::revoluteJointGui(f32& motorSpeed, f32& motorMaxTorque, bool& motorAlwaysEnabled, std::optional<InputButton>& clockwiseKey, std::optional<InputButton>& counterclockwiseKey, bool& clockwiseKeyWatingForKey, bool& counterclockwiseKeyWatingForKey) {
 	bool modificationFinished = false;
 
-	if (gameBeginPropertyEditor("simulation settings")) {
+	ImGui::SeparatorText("motor");
 
-		ImGui::SeparatorText("motor");
-
+	if (gameBeginPropertyEditor("motorSettings")) {
 		modificationFinished |= Gui::checkbox("always enabled", motorAlwaysEnabled);
 
 		Gui::inputFloat("speed", motorSpeed);
@@ -1665,27 +1668,66 @@ Vec2 Editor::shapeGetCenter(const EditorShape& shape) const {
 	return Vec2(0.0f);
 }
 
+static bool isPointInPolygon(const List<Vec2>& vertices, View<const i32> indices, Vec2 p) {
+	bool crossedOddTimes = false;
+	usize previous = indices[indices.size() - 1];
+	for (usize i = 0; i < indices.size(); i++) {
+		const auto current = indices[i];
+		const auto& a = vertices[previous];
+		const auto& b = vertices[current];
+
+		const auto pointYIsBetweenEdgeEndpointsY = (b.y > p.y) != (a.y > p.y);
+		const auto lineIntersectionX = (a.x - b.x) * (p.y - b.y) / (a.y - b.y) + b.x;
+
+		// The ray goes from the right side to the left side so any intersections to the left of the point are not counted.
+		const auto doesRayIntersect = p.x < lineIntersectionX;
+		if (pointYIsBetweenEdgeEndpointsY && doesRayIntersect)
+			crossedOddTimes = !crossedOddTimes;
+
+		previous = current;
+	}
+	return crossedOddTimes;
+}
+
 bool Editor::isPointInEditorShape(const EditorShape& shape, Vec2 point) const {
 	switch (shape.type) {
 		using enum EditorShapeType;
 	case CIRCLE:
 		return isPointInCircle(shape.circle.center, shape.circle.radius, point);
 
-	case POLYGON:
+	case POLYGON: {
 		const auto polygon = polygonShapes.get(shape.polygon);
 		if (!polygon.has_value()) {
-			break;
+			return false;
 		}
-		// @Performance
-		auto vertices = List<Vec2>::empty();
-		for (i64 i = 0; i < polygon->boundary.size(); i++) {
-			// TODO:
+		const auto p = Rotation(polygon->rotation) * point + polygon->translation;
+		bool result = false;
+		i64 i = 0;
+		for (; i < polygon->boundary.size(); i++) {
 			if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+				result = isPointInPolygon(polygon->vertices, View<const i32>(polygon->boundary.data(), i), p);
+				i++;
 				break;
 			}
-			vertices.add(polygon->vertices[polygon->boundary[i]]);
 		}
-		return isPointInTransformedPolygon(constView(vertices), polygon->translation, polygon->rotation, point);
+
+		if (!result) {
+			return false;
+		}
+
+		i64 start = i;
+		for (; i < polygon->boundary.size(); i++) {
+			if (polygon->boundary[i] == EditorPolygonShape::PATH_END_INDEX) {
+				if (isPointInPolygon(polygon->vertices, View<const i32>(polygon->boundary.data() + start, i - start), p)) {
+					return false;
+				}
+				start = i + 1;
+			}
+		}
+
+		return result;
+	}
+
 	}
 
 	CHECK_NOT_REACHED();
@@ -1732,6 +1774,8 @@ EditorShape Editor::cloneShape(const EditorShape& shape) {
 EntityArrayPair<EditorPolygonShape> Editor::createPolygonShape() {
 	auto shape = polygonShapes.create();
 	shape->vertices.clear();
+	shape->boundary.clear();
+	shape->trianglesVertices.clear();
 	return shape;
 }
 
@@ -1800,11 +1844,7 @@ Vec2 Editor::getRevoluteJointAbsolutePosition0(const EditorRevoluteJoint& joint)
 
 EntityArrayPair<EditorRigidBody> Editor::createRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask) {
 	auto body = rigidBodies.create();
-	body->shape = shape;
-	body->material = material;
-	body->isStatic = isStatic;
-	body->collisionCategories = collisionCategories;
-	body->collisionMask = collisionMask;
+	body->initialize(shape, material, isStatic, collisionCategories, collisionMask);
 	auto action = EditorActionCreateEntity(EditorEntityId(body.id));
 	actions.add(*this, EditorAction(std::move(action)));
 	return body;
@@ -1847,7 +1887,6 @@ Clipper2Lib::PathsD Editor::getShapePath(const EditorShape& shape) const {
 	}
 
 	return result;
-
 }
 
 void Editor::createRigidBodiesFromPaths(const Clipper2Lib::PathsD& paths, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask) {
@@ -2115,6 +2154,15 @@ void Editor::ShapeBooleanOperationsTool::gui() {
 		}
 		ImGui::EndCombo();
 	}
+}
+
+void Editor::ShapeBooleanOperationsTool::reset() {
+	selectedLhs = std::nullopt;
+	selectedRhs = std::nullopt;
+	bodiesUnderCursorOnLastLeftClick.clear();
+	bodiesUnderCursorOnLastRightClick.clear();
+	leftClickSelectionCycle = 0;
+	rightClickSelectionCycle = 0;
 }
 
 std::optional<Aabb> Editor::SelectTool::selectionBox(const Camera& camera, Vec2 cursorPos) const {
@@ -2611,13 +2659,7 @@ bool Editor::tryLoadLevel(const char* path) {
 		return false;
 	}
 	try {
-		selectedEntities.clear();
-		gizmoSelectedShapesAtGrabStart.clear();
-		gizmo.reset();
-		polygonShapes.reset();
-		rigidBodies.reset();
-		emitters.reset();
-		revoluteJoints.reset();
+		reset();
 
 		std::unordered_map<i32, EditorRigidBodyId> rigidBodyIndexToId;
 		{
@@ -2628,7 +2670,7 @@ bool Editor::tryLoadLevel(const char* path) {
 
 				auto shape = shapeFromLevel(bodyLevel.shape, bodyLevel.translation, bodyLevel.rotation);
 				if (!shape.has_value()) {
-					goto failedToLoadLevel;
+ 					goto failedToLoadLevel;
 				}
 				auto material = materialFromLevel(bodyLevel.material);
 				if (!material.has_value()) {
@@ -2636,7 +2678,8 @@ bool Editor::tryLoadLevel(const char* path) {
 				}
 
 				// TODO: Verify the bitfields.
-				const auto body = createRigidBody(std::move(*shape), std::move(*material), bodyLevel.isStatic, bodyLevel.collisionCategories.value, bodyLevel.collisionMask.value);
+				auto body = rigidBodies.create();
+				body->initialize(std::move(*shape), std::move(*material), bodyLevel.isStatic, bodyLevel.collisionCategories.value, bodyLevel.collisionMask.value);
 				rigidBodyIndexToId.insert({ index, body.id });
 			}
 		}
@@ -2682,7 +2725,7 @@ bool Editor::tryLoadLevel(const char* path) {
 					body0 = id->second;
 				}
 
-				const auto body1Id = rigidBodyIndexToId.find(*jointLevel.body0);
+				const auto body1Id = rigidBodyIndexToId.find(jointLevel.body1);
 				if (body1Id == rigidBodyIndexToId.end()) {
 					goto failedToLoadLevel;
 				}
@@ -2710,5 +2753,21 @@ bool Editor::tryLoadLevel(const char* path) {
 
 	failedToLoadLevel:
 	lastLoadedLevelPath = std::nullopt;
+	// Some parts of the level might have be loaded so clear again.
+	reset();
 	return false;
+}
+
+void Editor::reset() {
+	selectedEntities.clear();
+	gizmoSelectedShapesAtGrabStart.clear();
+	gizmo.reset();
+	polygonShapes.reset();
+	rigidBodies.reset();
+	emitters.reset();
+	revoluteJoints.reset();
+	actions.reset();
+	entityGuiRevoluteJoint = std::nullopt;
+	entityGuiRigidBody = std::nullopt;
+	entityGuiEmitter = std::nullopt;
 }

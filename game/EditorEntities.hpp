@@ -97,6 +97,7 @@ struct EditorRigidBody {
 		EditorRigidBody operator()();
 	};
 	EditorRigidBody(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
+	void initialize(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask);
 
 	EditorShape shape;
 	EditorMaterial material;

@@ -211,6 +211,7 @@ struct Editor {
 		};
 
 		void gui();
+		void reset();
 
 		BooleanOp selectedBooleanOp;
 
@@ -299,5 +300,7 @@ struct Editor {
 	std::optional<EditorMaterial> materialFromLevel(const LevelMaterial& material);
 	std::optional<EditorShape> shapeFromLevel(const LevelShape& shape, Vec2 translation, f32 rotation);
 	bool tryLoadLevel(const char* path);
+
+	void reset();
 };
 

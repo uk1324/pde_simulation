@@ -245,8 +245,8 @@ void MainLoop::switchFromEditorToSimulation() {
 
 	}
 
-	auto positionRelativeToBoundaryBody = [&](Vec2 pos) {
-		return pos - toVec2(b2Body_GetPosition(simulation.boundariesBodyId));
+	auto positionRelativeToBackgroundBody = [&](Vec2 pos) {
+		return pos - toVec2(b2Body_GetPosition(simulation.backgroundBodyId));
 	};
 
 	for (const auto& emitter : editor.emitters) {
@@ -261,8 +261,8 @@ void MainLoop::switchFromEditorToSimulation() {
 			bodyId = physicsId->second;
 			position = emitter->position;
 		} else {
-			bodyId = simulation.boundariesBodyId;
-			position = positionRelativeToBoundaryBody(emitter->position);
+			bodyId = simulation.backgroundBodyId;
+			position = positionRelativeToBackgroundBody(emitter->position);
 		}
 
 		simulation.emitters.add(Simulation::Emitter{
@@ -291,8 +291,8 @@ void MainLoop::switchFromEditorToSimulation() {
 			bodyId0 = physicsId0->second;
 			position0 = joint->position0;
 		} else {
-			bodyId0 = simulation.boundariesBodyId;
-			position0 = positionRelativeToBoundaryBody(joint->position0);
+			bodyId0 = simulation.backgroundBodyId;
+			position0 = positionRelativeToBackgroundBody(joint->position0);
 		}
 
 		{

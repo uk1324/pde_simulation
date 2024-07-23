@@ -96,6 +96,14 @@ bool EditorActions::recordingMultiAction() const {
     return multiActionNesting > 0;
 }
 
+void EditorActions::reset() {
+    actionStack.clear();
+    multiActionNesting = 0;
+    currentMultiActionSize = 0;
+    actions.clear();
+    lastDoneAction = -1;
+}
+
 EditorActions::Action::Action(i64 subActionCount)
     : subActionCount(subActionCount) {}
 

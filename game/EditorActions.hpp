@@ -108,5 +108,7 @@ struct EditorActions {
 	bool recordingMultiAction() const;
 	i64 currentMultiActionSize = 0;
 
+	void reset();
+
 	StackAllocator stackAllocator;
 };

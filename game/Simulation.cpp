@@ -146,6 +146,12 @@ Simulation::Simulation(Gfx2d& gfx)
 	}
 
 	{
+		b2BodyDef bodyDef = b2DefaultBodyDef();
+		bodyDef.position = b2Vec2_zero;
+		backgroundBodyId = b2CreateBody(world, &bodyDef);
+	}
+
+	{
 		const auto halfWidth = 10.0f;
 		const auto bounds = displayGridBounds();
 		const auto boundsSize = bounds.size();
@@ -354,7 +360,7 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 		}
 	}
 
-	render(renderer, grid3dScale);
+	render(renderer, grid3dScale, hideGui);
 
 	return Result{
 		.switchToEditor = switchToEditor
@@ -492,7 +498,7 @@ void Simulation::waveSimulationUpdate(f32 simulationDt) {
 	}
 }
 
-void Simulation::render(GameRenderer& renderer, Vec3 grid3dScale) {
+void Simulation::render(GameRenderer& renderer, Vec3 grid3dScale, bool hideGui) {
 	camera.aspectRatio = Window::aspectRatio();
 	renderer.gfx.camera = camera;
 
@@ -801,10 +807,12 @@ void Simulation::render(GameRenderer& renderer, Vec3 grid3dScale) {
 		display3d.renderTriangles();
 
 
-		glEnable(GL_BLEND);
-		renderer.gfx.diskTriangulated(camera.pos, 0.01f / camera.zoom, Vec4(Color3::WHITE, 0.2f));
-		glDisable(GL_BLEND);
-		renderer.gfx.drawFilledTriangles();
+		if (!hideGui) {
+			glEnable(GL_BLEND);
+			renderer.gfx.diskTriangulated(camera.pos, 0.01f / camera.zoom, Vec4(Color3::WHITE, 0.2f));
+			glDisable(GL_BLEND);
+			renderer.gfx.drawFilledTriangles();
+		}
 		glDisable(GL_DEPTH_TEST);
 	}	
 }

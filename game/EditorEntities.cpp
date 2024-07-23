@@ -42,6 +42,14 @@ EditorRigidBody::EditorRigidBody(const EditorShape& shape, const EditorMaterial&
 	, collisionCategories(collisionCategories)
 	, collisionMask(collisionMask) {}
 
+void EditorRigidBody::initialize(const EditorShape& shape, const EditorMaterial& material, bool isStatic, u32 collisionCategories, u32 collisionMask) {
+	this->shape = shape;
+	this->material = material;
+	this->isStatic = isStatic;
+	this->collisionCategories = collisionCategories;
+	this->collisionMask = collisionMask;
+}
+
 EditorShape::EditorShape(const EditorCircleShape& circle)
 	: circle(circle)
 	, type(EditorShapeType::CIRCLE) {}
@@ -175,7 +183,7 @@ const char* editorMaterialTypeName(EditorMaterialType material) {
 	switch (material) {
 		using enum EditorMaterialType;
 	case RELFECTING: return "reflecting";
-	case TRANSIMISIVE: return "transimisive";
+	case TRANSIMISIVE: return "transmissive";
 	}
 	CHECK_NOT_REACHED();
 	return "";
