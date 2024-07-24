@@ -73,7 +73,7 @@ void MainLoop::update() {
 			ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
 
 			const auto leftId = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.5f, nullptr, &id);
-			ImGui::DockBuilderSetNodeSize(leftId, ImVec2(0.2f * ImGui::GetIO().DisplaySize.x, 1.0f));
+			ImGui::DockBuilderSetNodeSize(leftId, ImVec2(0.24f * ImGui::GetIO().DisplaySize.x, 1.0f));
 
 			ImGui::DockBuilderDockWindow(simulationSimulationSettingsWindowName, leftId);
 			ImGui::DockBuilderDockWindow(editorSimulationSettingsWindowName, leftId);

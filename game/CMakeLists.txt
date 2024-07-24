@@ -17,5 +17,29 @@ target_link_libraries(simulation PUBLIC Clipper2)
 
 target_compile_options(simulation PRIVATE /we4062)
 
-# targetAddGeneratedDependencies(simulation "../engine/gfx2d")
 targetAddGenerated(simulation ${CMAKE_CURRENT_SOURCE_DIR})
+
+# If this is on then the console logs won't show
+if (FINAL_RELEASE)
+	if (WIN32)
+		set_target_properties(simulation PROPERTIES WIN32_EXECUTABLE TRUE)
+	endif()
+endif()
+
+if (FINAL_RELEASE)
+	set(EMBED_TOOL "$<TARGET_FILE:embedTool>")
+	add_custom_command(
+		TARGET simulation PRE_BUILD
+		COMMAND ${EMBED_TOOL}
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		DEPENDS ${EMBED_TOOL}
+	)
+	set(BUILD_TOOL "$<TARGET_FILE:buildTool>")
+	set(targetName "simulation")
+	add_custom_command(
+		TARGET ${targetName} POST_BUILD
+		COMMAND ${BUILD_TOOL} $<TARGET_FILE:simulation>
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		DEPENDS ${BUILD_TOOL}
+	)
+endif()

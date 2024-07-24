@@ -320,6 +320,7 @@ Simulation::Result Simulation::update(GameRenderer& renderer, const GameInput& i
 	}
 
 	if (!simulationSettings.paused) {
+		b2World_SetGravity(world, fromVec2(simulationSettings.gravity));
 		b2World_Step(world, simulationDt, simulationSettings.rigidbodySimulationSubStepCount);
 
 		const auto simulationGridBounds = this->simulationGridBounds();

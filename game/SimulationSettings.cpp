@@ -14,6 +14,7 @@ SimulationSettings SimulationSettings::makeDefault() {
 		.rightBoundaryCondition = SimulationBoundaryCondition::REFLECTING,
 		.dampingPerSecond = 0.90f,
 		.speedDampingPerSecond = 0.90f,
+		.gravity = Vec2(0.0f, -10.0f)
 	};
 }
 
@@ -76,6 +77,8 @@ void simulationSettingsGui(SimulationSettings& settings) {
 
 		Gui::sliderFloat("speed damping per second", settings.speedDampingPerSecond, 0.0f, 1.0f);
 		settings.speedDampingPerSecond = std::clamp(settings.speedDampingPerSecond, 0.0f, 1.0f);
+		
+		Gui::inputVec2("gravity", settings.gravity);
 
 		Gui::endPropertyEditor();
 	}

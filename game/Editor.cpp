@@ -526,16 +526,16 @@ Editor::Result Editor::gui() {
 
 		const ToolDisplay tools[]{
 			{ ToolType::SELECT, "select", nullptr },
-			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius"},
-			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference" },
-			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola" },
-			{ ToolType::POLYGON, "polygon", "Left click to pick vertices. Press shift to finish drawing." },
-			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners." },
-			{ ToolType::LINE, "line", "Left click to pick endpoints." },
-			{ ToolType::REGULAR_POLYGON, "regular polygon", "Left click to pick center and radius" },
+			{ ToolType::CIRCLE, "circle", "Left click to select center. Left click again to select radius. Right click to cancel."},
+			{ ToolType::ELLIPSE, "ellipse", "Left click to pick the foci. Left click again to pick a point of the circumference. Right click to cancel." },
+			{ ToolType::PARABOLA, "parabola", "Left click to pick the focus, vertex and the bound for the parabola. Right click to cancel." },
+			{ ToolType::POLYGON, "polygon", "Left click to pick vertices. Press shift to finish drawing. Right click to cancel." },
+			{ ToolType::RECTANGLE, "rectangle", "Left click to pick corners. Right click to cancel." },
+			{ ToolType::LINE, "line", "Left click to pick endpoints. Right click to cancel." },
+			{ ToolType::REGULAR_POLYGON, "regular polygon", "Left click to pick center and radius. Right click to cancel." },
 			{ ToolType::BOOLEAN_SHAPE_OPERATIONS, "boolean shape operations", "Select left hand size using left click and right hand side right click. Press shift to apply."},
 			{ ToolType::EMMITER, "emmiter", "Left click on rigid body to place." },
-			{ ToolType::REVOLUTE_JOINT, "revolute", "Left click to create joint." },
+			{ ToolType::REVOLUTE_JOINT, "revolute joint", "Left click to create joint." },
 		};
 
 		ImGui::SeparatorText("tool");
